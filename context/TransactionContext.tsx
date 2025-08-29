@@ -1,14 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
-import {
-  collection,
-  doc,
-  getDocs,
-  query,
-  setDoc,
-  Timestamp,
-  where,
-} from "firebase/firestore";
+import firestore from "@react-native-firebase/firestore";
 import React, {
   createContext,
   ReactNode,
@@ -19,8 +11,7 @@ import React, {
 import "react-native-get-random-values";
 import Toast from "react-native-toast-message";
 import { v4 as uuidv4 } from "uuid";
-import { db } from "../config/firebase";
-import { sampleTransactions } from "../data/sampleTransactions";
+import { sampleTransactions } from "../data/transactionCategories";
 import type { Transaction, TransactionContextType } from "../types";
 
 const TransactionContext = createContext<TransactionContextType | undefined>(
@@ -47,16 +38,27 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
-  const [autoSync, setAutoSync] = useState(true); // <-- NEW
+  const [autoSync, setAutoSync] = useState(true);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
 
   useEffect(() => {
     AsyncStorage.getItem("autoSync").then((val) => {
       if (val !== null) setAutoSync(val === "true");
     });
   }, []);
+
   useEffect(() => {
     AsyncStorage.setItem("autoSync", String(autoSync));
   }, [autoSync]);
+
+  // Load pending delete queue on mount
+  useEffect(() => {
+    AsyncStorage.getItem("pendingDeletes")
+      .then((val) => {
+        if (val) setPendingDeleteIds(JSON.parse(val));
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const initialize = async () => {
@@ -67,7 +69,6 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
 
     const unsubscribe = NetInfo.addEventListener((state) => {
       if (state.isConnected && !loading && autoSync) {
-        // <-- only on autoSync
         syncAllTransactions();
       }
     });
@@ -81,6 +82,14 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
       syncAllTransactions();
     }
   }, [autoSync, loading]);
+
+  const saveTransactions = async (arr: Transaction[]) => {
+    await AsyncStorage.setItem("transactions", JSON.stringify(arr));
+  };
+
+  const savePendingDeletes = async (ids: string[]) => {
+    await AsyncStorage.setItem("pendingDeletes", JSON.stringify(ids));
+  };
 
   /**
    * Load transactions from AsyncStorage or initialize with sample data
@@ -130,10 +139,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
 
       const updatedTransactions = [...transactions, transactionWithId];
 
-      await AsyncStorage.setItem(
-        "transactions",
-        JSON.stringify(updatedTransactions)
-      );
+      await saveTransactions(updatedTransactions);
 
       setTransactions((prevTransactions) => [
         ...prevTransactions,
@@ -155,6 +161,79 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
   };
 
   /**
+   * Delete a transaction locally first; try remote delete; on failure queue for retry.
+   */
+  const deleteTransaction = async (id: string): Promise<void> => {
+    try {
+      const existing = transactions.find((t) => t.id === id);
+      if (!existing) {
+        Toast.show({
+          type: "info",
+          text1: "Not found",
+          text2: "Transaction already removed.",
+        });
+        return;
+      }
+
+      // Optimistic local removal
+      const remaining = transactions.filter((t) => t.id !== id);
+      setTransactions(remaining);
+      await saveTransactions(remaining);
+
+      // Try remote delete
+      await attemptDeleteTransaction(id);
+      Toast.show({
+        type: "success",
+        text1: "Deleted",
+        text2: "Transaction removed.",
+      });
+    } catch (err) {
+      // Queue for retry
+      setPendingDeleteIds((prev) => {
+        const next = prev.includes(id) ? prev : [...prev, id];
+        savePendingDeletes(next).catch(() => {});
+        return next;
+      });
+      Toast.show({
+        type: "error",
+        text1: "Delete failed",
+        text2: "Will retry when online.",
+      });
+    }
+  };
+
+  /**
+   * Attempt Firestore delete with connectivity check + backoff
+   */
+  const attemptDeleteTransaction = async (id: string): Promise<void> => {
+    const net = await NetInfo.fetch();
+    if (!net.isConnected) throw new Error("Offline");
+
+    const MAX_RETRIES = 5;
+    let attempt = 0;
+    let delay = 1000;
+
+    while (attempt < MAX_RETRIES) {
+      try {
+        await firestore().collection("transactions").doc(id).delete();
+
+        // On success, remove from pending queue if present
+        setPendingDeleteIds((prev) => {
+          const next = prev.filter((x) => x !== id);
+          savePendingDeletes(next).catch(() => {});
+          return next;
+        });
+        return;
+      } catch (e) {
+        attempt += 1;
+        if (attempt >= MAX_RETRIES) throw e;
+        await sleep(delay);
+        delay *= 2;
+      }
+    }
+  };
+
+  /**
    * Get unsynced transactions
    */
   const getUnsyncedTransactions = (): Transaction[] => {
@@ -168,18 +247,19 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
     lastSyncTime: string
   ): Promise<Transaction[]> => {
     try {
-      const transactionsRef = collection(db, "transactions");
-      const q = query(
-        transactionsRef,
-        where("timestamp", ">", Timestamp.fromDate(new Date(lastSyncTime)))
-      );
+      const querySnapshot = await firestore()
+        .collection("transactions")
+        .where(
+          "timestamp",
+          ">",
+          firestore.Timestamp.fromDate(new Date(lastSyncTime))
+        )
+        .get();
 
-      const querySnapshot = await getDocs(q);
       const serverTransactions: Transaction[] = [];
 
       querySnapshot.forEach((doc) => {
-        const data = doc.data() as Transaction;
-
+        const data = doc.data();
         serverTransactions.push({
           id: doc.id,
           amount: data.amount,
@@ -243,6 +323,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
       throw error;
     }
   };
+
   /**
    * Sync a single transaction with the server
    */
@@ -286,6 +367,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
       setIsSyncing(false);
     }
   };
+
   /**
    * Attempt to sync a single transaction with retry logic
    */
@@ -338,10 +420,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
         const updatedTransactions = prevTransactions.map((tx) =>
           tx.id === id ? { ...tx, synced: true } : tx
         );
-        AsyncStorage.setItem(
-          "transactions",
-          JSON.stringify(updatedTransactions)
-        ).catch((error) => {
+        saveTransactions(updatedTransactions).catch((error) => {
           console.error("Error saving to AsyncStorage:", error);
         });
         return updatedTransactions;
@@ -356,15 +435,17 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
    */
   const uploadTransaction = async (transaction: Transaction): Promise<void> => {
     try {
-      const transactionRef = doc(db, "transactions", transaction.id);
-      await setDoc(transactionRef, {
-        amount: transaction.amount,
-        category: transaction.category,
-        date: transaction.date,
-        notes: transaction.notes,
-        type: transaction.type,
-        timestamp: Timestamp.fromDate(new Date(transaction.date)),
-      });
+      await firestore()
+        .collection("transactions")
+        .doc(transaction.id)
+        .set({
+          amount: transaction.amount,
+          category: transaction.category,
+          date: transaction.date,
+          notes: transaction.notes,
+          type: transaction.type,
+          timestamp: firestore.Timestamp.fromDate(new Date(transaction.date)),
+        });
       console.log("Uploaded transaction to Firestore:", transaction.id);
     } catch (error) {
       console.error("Error uploading transaction:", error);
@@ -372,9 +453,6 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
     }
   };
 
-  /**
-   * Synchronize transactions with the server
-   */
   /**
    * Sync all unsynced transactions with the server
    */
@@ -399,6 +477,25 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
         return;
       }
 
+      // 1) Process deletions first
+      if (pendingDeleteIds.length > 0) {
+        const toDelete = [...pendingDeleteIds];
+        for (const id of toDelete) {
+          try {
+            await attemptDeleteTransaction(id);
+            // If item still exists locally for some reason, remove it
+            setTransactions((prev) => {
+              const next = prev.filter((t) => t.id !== id);
+              saveTransactions(next).catch(() => {});
+              return next;
+            });
+          } catch (e) {
+            console.warn("Delete retry pending for id:", id);
+          }
+        }
+      }
+
+      // 2) Upload unsynced transactions
       const unsyncedTransactions = getUnsyncedTransactions();
       console.log(`Found ${unsyncedTransactions.length} unsynced transactions`);
 
@@ -414,9 +511,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
         }
       }
 
-      /**
-       * After uploading, fetch and merge server transactions
-       */
+      // 3) After uploading, fetch and merge server transactions
       await fetchAndMergeServerTransactions();
     } catch (error) {
       console.error("Bulk sync process failed:", error);
@@ -473,7 +568,15 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
     new Promise((resolve) => setTimeout(resolve, ms));
 
   return (
-    <TransactionContext.Provider value={{ transactions, addTransaction }}>
+    <TransactionContext.Provider
+      value={{
+        transactions,
+        addTransaction,
+        deleteTransaction,
+        isSyncing,
+        autoSync,
+        setAutoSync: (value: boolean) => setAutoSync(value),
+      }}>
       {children}
     </TransactionContext.Provider>
   );

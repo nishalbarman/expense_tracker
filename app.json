@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "money-track",
+    "name": "MoneyTrack",
     "slug": "money-track",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,16 +8,20 @@
     "scheme": "moneytrack",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundImage": "./assets/images/adaptive-icon-background.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.technoapps.expensetracker",
-      "googleServicesFile": "./google/google-services.json"
+      "googleServicesFile": "./google/google-services.json",
+      "versionCode": 8,
+      "version": "1.0.8"
     },
     "web": {
       "bundler": "metro",
@@ -25,6 +29,8 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
       [
         "expo-sqlite",
         {
@@ -50,7 +56,9 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

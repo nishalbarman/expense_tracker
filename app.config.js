@@ -12,6 +12,7 @@ export default ({ config }) => ({
     firebaseAppId: process.env.FIREBASE_APP_ID,
     eas: {
       projectId: process.env.EAS_PROJECT_ID,
+        EAS_SKIP_AUTO_FINGERPRINT: true
     },
   },
 });

@@ -1,80 +1,100 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { List, Text } from 'react-native-paper';
-import { Transaction } from '../types';
-import { useTheme } from 'react-native-paper';
+import React from "react";
+import { View, StyleSheet, Text, Platform } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Transaction } from "../types";
+import { useTheme } from "@react-navigation/native";
 
 interface HistoryItemProps {
   item: Transaction;
   index: number;
 }
 
-export const HistoryItem: React.FC<HistoryItemProps> = ({ item, index }) => {
+export const HistoryItem: React.FC<HistoryItemProps> = ({ item }) => {
   const theme = useTheme();
 
+  const iconName = item.type === "income" ? "add-circle" : "remove-circle";
+  const iconColor =
+    item.type === "income" ? theme.colors.primary : theme.colors.notification;
+
   return (
-    <List.Item
-      title={item.category}
-      description={item.notes}
-      left={(props) => (
-        <List.Icon
-          {...props}
-          icon={
-            item.type === 'income' ? 'arrow-up-circle' : 'arrow-down-circle'
-          }
-          color={
-            item.type === 'income' ? theme.colors.primary : theme.colors.error
-          }
-        />
-      )}
-      right={() => (
-        <View style={styles.rowContainer}>
-          <View style={styles.amountContainer}>
-            <Text
-              style={[
-                styles.amount,
-                {
-                  color:
-                    item.type === 'income'
-                      ? theme.colors.primary
-                      : theme.colors.error,
-                },
-              ]}
-            >
-              ₹{item.amount.toFixed(2)}
-            </Text>
-            <Text style={styles.date}>
-              {new Date(item.date).toLocaleDateString()}
-            </Text>
-          </View>
-          <Text style={styles.syncStatus}>{item.synced ? '✅' : '🔄'}</Text>
+    <View style={styles.container}>
+      <Ionicons
+        name={iconName as any}
+        size={24}
+        color={iconColor}
+        style={styles.icon}
+      />
+      <View style={styles.content}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>
+          {item.category}
+        </Text>
+        {!!item.notes && (
+          <Text
+            style={[styles.description, { color: theme.colors.text + "80" }]}>
+            {item.notes}
+          </Text>
+        )}
+      </View>
+      <View style={styles.right}>
+        <View style={styles.amountContainer}>
+          <Text
+            style={[
+              styles.amount,
+              {
+                color:
+                  item.type === "income"
+                    ? theme.colors.primary
+                    : theme.colors.notification,
+              },
+            ]}>
+            ₹{item.amount.toFixed(2)}
+          </Text>
+          <Text style={[styles.date, { color: theme.colors.text + "60" }]}>
+            {new Date(item.date).toLocaleDateString()}
+          </Text>
         </View>
-      )}
-    />
+        <Text style={styles.syncStatus}>{item.synced ? "✅" : "🔄"}</Text>
+      </View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  transactionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+  container: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    // borderBlockColor: "#000000",
+    backgroundColor: "#FFFFFF",
   },
-  rowContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 2,
+  icon: {
+    marginRight: 12,
+  },
+  content: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  description: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  right: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   amountContainer: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
   },
   amount: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "700",
   },
   date: {
     fontSize: 12,
-    color: '#666',
+    marginTop: 2,
   },
   syncStatus: {
     fontSize: 18,

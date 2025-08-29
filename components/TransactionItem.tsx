@@ -1,8 +1,7 @@
 import React from "react";
-import { View, StyleSheet } from "react-native";
-import { Text, useTheme } from "react-native-paper";
-
+import { View, StyleSheet, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "@react-navigation/native";
 import type { Transaction } from "../types";
 
 interface TransactionItemProps {
@@ -11,46 +10,65 @@ interface TransactionItemProps {
 
 export const TransactionItem = ({ transaction }: TransactionItemProps) => {
   const theme = useTheme();
+  
+  const iconColor =
+    transaction.type === "income"
+      ? theme.colors.primary
+      : theme.colors.notification;
+
   return (
     <View key={transaction.id} style={styles.transactionItem}>
-      <Ionicons
-        style={{
-          justifyContent: "center",
-          borderRadius: 11,
-          padding: 4,
-          backgroundColor:
-            transaction.type === "income" ? "#e1ffe4ff" : "#ffeeeeff",
-        }}
-        name={
-          transaction.type === "income"
-            ? "arrow-down-circle"
-            : "arrow-up-circle"
-        }
-        size={24}
-        color={
-          transaction.type === "income"
-            ? theme.colors.primary
-            : theme.colors.error
-        }
-      />
+      <View
+        style={[
+          styles.iconContainer,
+          // { backgroundColor: iconColor + '20' } // Adding transparency for background
+        ]}
+      >
+        <Ionicons
+          name={
+            transaction.type === "income"
+              ? "add-circle"
+              : "remove-circle"
+          }
+          size={24}
+          color={iconColor}
+        />
+      </View>
+      
       <View style={styles.transactionDetails}>
-        <Text style={styles.transactionCategory}>{transaction.category}</Text>
-        <Text style={styles.transactionDate}>
+        <Text 
+          style={[
+            styles.transactionCategory, 
+            { color: theme.colors.text }
+          ]}
+        >
+          {transaction.category}
+        </Text>
+        <Text 
+          style={[
+            styles.transactionDate, 
+            { color: theme.colors.text + '60' }
+          ]}
+        >
           {new Date(transaction.date).toLocaleDateString()}
         </Text>
       </View>
-      <Text
-        style={[
-          styles.transactionAmount,
-          {
-            color:
-              transaction.type === "income"
-                ? theme.colors.primary
-                : theme.colors.error,
-          },
-        ]}>
-        ₹{transaction.amount.toFixed(2)}
-      </Text>
+      
+      <View>
+        <Text
+          style={[
+            styles.transactionAmount,
+            {
+              color:
+                transaction.type === "income"
+                  ? theme.colors.primary
+                  : theme.colors.notification,
+            },
+          ]}
+        >
+          ₹{transaction.amount.toFixed(2)}
+        </Text>
+      </View>
     </View>
   );
 };
@@ -59,19 +77,29 @@ const styles = StyleSheet.create({
   transactionItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
+    paddingVertical: 8,
+  },
+  iconContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 11,
+    padding: 4,
+    width: 32,
+    height: 32,
   },
   transactionDetails: {
     flex: 1,
+    justifyContent: "center",
     marginLeft: 12,
+    paddingBottom: 0,
   },
   transactionCategory: {
     fontSize: 16,
     fontWeight: "500",
   },
   transactionDate: {
+    marginTop: 4,
     fontSize: 12,
-    color: "#666",
   },
   transactionAmount: {
     fontSize: 16,
