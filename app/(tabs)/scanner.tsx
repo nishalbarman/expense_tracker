@@ -10,10 +10,12 @@ import {
   ActivityIndicator,
   Dimensions,
   Platform,
+  Modal,
+  PixelRatio,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
+// import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInUp, FadeIn } from "react-native-reanimated";
 import TextRecognition from "@react-native-ml-kit/text-recognition";
 import {
@@ -22,20 +24,105 @@ import {
   ImagePickerResponse,
 } from "react-native-image-picker";
 import Clipboard from "@react-native-clipboard/clipboard";
+import { useTheme } from "@react-navigation/native";
+import {
+  getAI,
+  getGenerativeModel,
+  GoogleAIBackend,
+  Schema,
+} from "@react-native-firebase/ai";
+// import * as Progress from "react-native-progress";
+import { getApp } from "@react-native-firebase/app";
+import { transactionCategories } from "@/data/transactionCategories";
+import appCheck from "@react-native-firebase/app-check";
+import auth from "@react-native-firebase/auth";
+import Toast from "react-native-toast-message";
+import { useTransactions } from "@/context/TransactionContext";
 
 const { width: screenWidth } = Dimensions.get("window");
 
+// interface RecognizedText {
+//   text: string;
+//   blocks: Array<{
+//     text: string;
+//     frame: { x: number; y: number; width: number; height: number };
+//     lines: Array<{
+//       text: string;
+//       frame: { x: number; y: number; width: number; height: number };
+//     }>;
+//   }>;
+// }
+
 interface RecognizedText {
-  text: string;
-  blocks: Array<{
-    text: string;
-    frame: { x: number; y: number; width: number; height: number };
-    lines: Array<{
-      text: string;
-      frame: { x: number; y: number; width: number; height: number };
-    }>;
-  }>;
+  amount: string;
+  category: string;
+  note: string;
+  type: "expense" | "income";
 }
+
+type FormValues = {
+  type: "expense" | "income";
+  amount: string;
+  category: string;
+  notes: string;
+};
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const BASE_WIDTH = 375; // iPhone 11 baseline
+const widthScale = SCREEN_WIDTH / BASE_WIDTH;
+
+// Moderated scale for fonts: avoids over-scaling
+const moderateScale = (size: number, factor = 0.5) =>
+  size + (widthScale * size - size) * factor;
+
+const responsiveFontSize = (fontSize: number, factor = 0.5) => {
+  const newSize = moderateScale(fontSize, factor);
+  return Math.round(PixelRatio.roundToNearestPixel(newSize));
+};
+
+export const TextResultCard = ({
+  recognizedText,
+}: {
+  recognizedText: {
+    amount?: string;
+    category?: string;
+    note?: string;
+    type?: string;
+  };
+}) => {
+  return (
+    <View style={styles.card}>
+      <Row label="Amount" value={recognizedText?.amount ?? "—"} />
+      <Divider />
+      <Row label="Category" value={recognizedText?.category ?? "—"} />
+      <Divider />
+      <Row label="Note" value={recognizedText?.note ?? "—"} multiline />
+      <Divider />
+      <Row label="Type" value={recognizedText?.type ?? "—"} />
+    </View>
+  );
+};
+
+const Row = ({
+  label,
+  value,
+  multiline,
+}: {
+  label: string;
+  value: string;
+  multiline?: boolean;
+}) => (
+  <View style={styles.row}>
+    <Text style={styles.label}>{label}:</Text>
+    <Text
+      style={[styles.value, multiline && styles.valueMultiline]}
+      numberOfLines={multiline ? 0 : 1}>
+      {value}
+    </Text>
+  </View>
+);
+
+const Divider = () => <View style={styles.divider} />;
 
 export default function ScanImageScreen(): JSX.Element {
   const insets = useSafeAreaInsets();
@@ -89,6 +176,72 @@ export default function ScanImageScreen(): JSX.Element {
     });
   }, []);
 
+  const extractTransactionDetails = useCallback(async (text) => {
+    const app = getApp();
+    // Can also pass an instance of auth which will pass in an auth token if a user is signed-in
+    const authInstance = auth(app);
+    const appCheckInstance = appCheck(app);
+    // Configure appCheck instance as per docs....
+    const options = {
+      appCheck: appCheckInstance,
+      auth: authInstance,
+      backend: new GoogleAIBackend(),
+    };
+
+    const ai = getAI(app, options);
+
+    const jsonSchema = Schema.object({
+      properties: {
+        amount: Schema.string(),
+        category: Schema.string(),
+        note: Schema.string(),
+        type: Schema.string(),
+      },
+    });
+
+    let systemIntruction = `
+      You are an AI that extracts structured financial information from text. 
+      The text will describe a transaction. From the text, identify and return the following fields in JSON format:
+
+      - amount: The numeric value of money (without currency symbol).
+      - category: The main category of the transaction, select from "${transactionCategories.expense.join(
+        ","
+      )},${transactionCategories.income.join(",")}".
+      - note: Any additional description or details from the text.
+      - type: Either "expense" or "income" (determine based on the context).
+
+      If any field is missing, leave it as an empty string.  
+
+      Example Input:  
+      "Bought groceries for 500 rupees at Reliance Fresh"  
+
+      Example Output:  
+      {
+        "amount": "500",
+        "category": "Groceries",
+        "note": "Bought groceries at Reliance Fresh",
+        "type": "expense"
+      }
+      `;
+
+    const model = getGenerativeModel(ai, {
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: jsonSchema,
+      },
+      systemInstruction: systemIntruction,
+    });
+
+    console.log(systemIntruction);
+
+    const prompt = `Extract transaction details from the following text:\n\n"${text}"\n\nReturn the response in JSON format.`;
+
+    let result = await model.generateContent(prompt);
+    // console.log(result.response.text());
+    return result.response.text();
+  }, []);
+
   // Perform OCR text recognition
   const performTextRecognition = useCallback(async () => {
     if (!selectedImage) return;
@@ -96,7 +249,11 @@ export default function ScanImageScreen(): JSX.Element {
     setIsProcessing(true);
     try {
       const result = await TextRecognition.recognize(selectedImage);
-      setRecognizedText(result);
+
+      const transactionalData = await extractTransactionDetails(result.text);
+      console.log("Transactional Data: ", transactionalData);
+
+      setRecognizedText(JSON.parse(transactionalData));
       setHasResult(true);
     } catch (error) {
       console.error("Text recognition error:", error);
@@ -109,13 +266,60 @@ export default function ScanImageScreen(): JSX.Element {
     }
   }, [selectedImage]);
 
-  // Copy text to clipboard
-  const copyToClipboard = useCallback(() => {
-    if (recognizedText?.text) {
-      Clipboard.setString(recognizedText.text);
-      Alert.alert("Copied", "Text copied to clipboard!");
+  const formatAmountInput = (txt: string) => {
+    const cleaned = txt.replace(/[^\d.]/g, "");
+    const parts = cleaned.split(".");
+    const normalized =
+      parts.length > 1
+        ? `${parts[0].replace(/^0+(?=\d)/, "") || "0"}.${parts[1].slice(0, 2)}`
+        : (parts[0] || "").replace(/^0+(?=\d)/, "");
+    return normalized;
+  };
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { addTransaction } = useTransactions();
+
+  const handleCopyTransaction = async () => {
+    if (!recognizedText) return;
+    try {
+      setIsSubmitting(true);
+      const amt = parseFloat(formatAmountInput(recognizedText.amount));
+      if (Number.isNaN(amt) || amt <= 0) {
+        Toast.show({
+          type: "error",
+          text1: "Invalid amount",
+          text2: "Enter a valid amount greater than 0.",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      const newTransaction = {
+        amount: amt,
+        category: recognizedText.category,
+        type: recognizedText.type,
+        date: new Date().toISOString(),
+        notes: recognizedText.note?.trim() || "",
+        synced: false,
+      };
+      await addTransaction(newTransaction);
+      Toast.show({ type: "success", text1: "Transaction added" });
+      // reset();
+      // Keyboard.dismiss();
+      // router.replace("/");
+      setHasResult(false);
+      setSelectedImage(null);
+      setRecognizedText(null);
+    } catch (e) {
+      console.error("Failed to add transaction:", e);
+      Toast.show({
+        type: "error",
+        text1: "Failed to add",
+        text2: "Please try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [recognizedText]);
+  };
 
   // Reset screen
   const resetScreen = useCallback(() => {
@@ -139,25 +343,30 @@ export default function ScanImageScreen(): JSX.Element {
     );
   }, [takePicture, selectFromGallery]);
 
+  const theme = useTheme();
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
-      <LinearGradient
-        colors={["#4ECDC4", "#45B7D1"]}
+      {/* <LinearGradient
+        colors={[theme.colors.primary, theme.colors.secondary]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Text Scanner</Text>
+          <Text style={styles.headerTitle}>Scanner</Text>
           <Text style={styles.headerSubtitle}>
-            Scan text from images using AI
+            Scan your bill from images using AI
           </Text>
         </View>
-      </LinearGradient>
+      </LinearGradient> */}
 
       <ScrollView
         style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 90 },
+        ]}
         showsVerticalScrollIndicator={false}>
         {/* Image Selection Section */}
         {!selectedImage ? (
@@ -172,7 +381,10 @@ export default function ScanImageScreen(): JSX.Element {
               Choose an image from your camera or gallery to extract text
             </Text>
             <TouchableOpacity
-              style={styles.selectButton}
+              style={[
+                styles.selectButton,
+                { backgroundColor: theme.colors.primary },
+              ]}
               onPress={showImagePicker}>
               <Ionicons name="add" size={24} color="#FFFFFF" />
               <Text style={styles.selectButtonText}>Select Image</Text>
@@ -204,10 +416,14 @@ export default function ScanImageScreen(): JSX.Element {
                 {isProcessing ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Ionicons name="text-outline" size={20} color="#FFFFFF" />
+                  <Ionicons
+                    name="document-text-outline"
+                    size={20}
+                    color="#FFFFFF"
+                  />
                 )}
                 <Text style={styles.actionButtonText}>
-                  {isProcessing ? "Processing..." : "Scan Text"}
+                  {isProcessing ? "Processing..." : "Scan Image"}
                 </Text>
               </TouchableOpacity>
 
@@ -229,21 +445,23 @@ export default function ScanImageScreen(): JSX.Element {
             entering={FadeInUp.delay(300).duration(600)}
             style={styles.resultsSection}>
             <View style={styles.resultsHeader}>
-              <Text style={styles.resultsTitle}>Recognized Text</Text>
-              {recognizedText.text && (
+              <Text style={styles.resultsTitle}>Recognized Transaction</Text>
+              {recognizedText && (
                 <TouchableOpacity
                   style={styles.copyButton}
-                  onPress={copyToClipboard}>
-                  <Ionicons name="copy-outline" size={18} color="#4ECDC4" />
-                  <Text style={styles.copyButtonText}>Copy</Text>
+                  onPress={handleCopyTransaction}>
+                  {isSubmitting ? (
+                    <ActivityIndicator color="white" size="small" />
+                  ) : (
+                    <Ionicons name="add-outline" size={18} color="#4ECDC4" />
+                  )}
+                  <Text style={styles.copyButtonText}>ADD</Text>
                 </TouchableOpacity>
               )}
             </View>
 
-            {recognizedText.text ? (
-              <View style={styles.textResultContainer}>
-                <Text style={styles.recognizedText}>{recognizedText.text}</Text>
-              </View>
+            {recognizedText ? (
+              <TextResultCard recognizedText={recognizedText} />
             ) : (
               <View style={styles.noTextContainer}>
                 <Ionicons name="document-text-outline" size={48} color="#CCC" />
@@ -257,7 +475,7 @@ export default function ScanImageScreen(): JSX.Element {
             )}
 
             {/* Text Statistics */}
-            {recognizedText.text && (
+            {/* {recognizedText.text && (
               <View style={styles.statsContainer}>
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>
@@ -283,10 +501,34 @@ export default function ScanImageScreen(): JSX.Element {
                   <Text style={styles.statLabel}>Words</Text>
                 </View>
               </View>
-            )}
+            )} */}
           </Animated.View>
         )}
       </ScrollView>
+
+      {/* <Modal
+        visible={!llm.isReady}
+        animationType="slide"
+        transparent
+        collapsable={false}>
+        <Modal visible={!llm.isReady} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View
+              style={[
+                styles.sheetContainer,
+                { backgroundColor: theme.colors.card },
+              ]}>
+              <Text
+                style={{
+                  marginBottom: 12,
+                }}>
+                Please Wait ..
+              </Text>
+              <Progress.Bar progress={llm.downloadProgress} width={200} />
+            </View>
+          </View>
+        </Modal>
+      </Modal> */}
     </View>
   );
 }
@@ -294,7 +536,6 @@ export default function ScanImageScreen(): JSX.Element {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
   },
   header: {
     paddingHorizontal: 20,
@@ -533,5 +774,59 @@ const styles = StyleSheet.create({
     width: 1,
     backgroundColor: "#E5E7EB",
     marginHorizontal: 16,
+  },
+
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sheetContainer: {
+    backgroundColor: "white",
+    padding: 20,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+
+  card: {
+    padding: 16,
+    // borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    // iOS shadow
+    // shadowColor: "#000",
+    // shadowOffset: { width: 0, height: 8 },
+    // shadowOpacity: 0.12,
+    // shadowRadius: 12,
+    // Android shadow
+    // elevation: 6,
+    // Layout
+    gap: 8,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  label: {
+    width: 88,
+    color: "#6B7280", // gray-500
+    fontWeight: "600",
+    fontSize: responsiveFontSize(13),
+  },
+  value: {
+    flex: 1,
+    fontWeight: "bold",
+    color: "#111827", // gray-900
+    fontSize: responsiveFontSize(15),
+  },
+  valueMultiline: {
+    lineHeight: responsiveFontSize(20),
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "#E5E7EB", // gray-200
+    marginVertical: 4,
   },
 });

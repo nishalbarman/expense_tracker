@@ -15,13 +15,14 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundImage": "./assets/images/adaptive-icon-background.png",
-        "backgroundColor": "#ffffff"
+        // "backgroundImage": "./assets/images/adaptive-icon-background.png",
+        "backgroundColor": "#2CA2B0"
       },
       "package": "com.technoapps.expensetracker",
       "googleServicesFile": "./google/google-services.json",
       "versionCode": 8,
-      "version": "1.0.8"
+      "version": "1.0.8",
+      "edgeToEdgeEnabled": true
     },
     "web": {
       "bundler": "metro",
@@ -31,6 +32,7 @@
     "plugins": [
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
+      "@react-native-firebase/app-check",
       [
         "expo-sqlite",
         {

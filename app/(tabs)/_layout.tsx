@@ -28,7 +28,7 @@ export function getBottomContentPadding(insetBottom: number, extra = 16) {
   return BAR_HEIGHT + Math.max(insetBottom, 0) + extra;
 }
 
-type RouteName = "index" | "add" | "history" | "charts" | "account";
+type RouteName = "index" | "add" | "scanner" | "history" | "charts" | "account";
 
 export default function AppLayout() {
   const theme = useTheme();
@@ -64,6 +64,7 @@ export default function AppLayout() {
           options={{ title: "Dashboard", headerShown: false }}
         />
         <Tabs.Screen name="add" options={{ title: "Add New Transaction" }} />
+        <Tabs.Screen name="scanner" options={{ title: "Scanner" }} />
         <Tabs.Screen name="history" options={{ title: "History" }} />
         <Tabs.Screen
           name="charts"
@@ -259,8 +260,10 @@ function getIcon(
       return focused ? "list" : "list-outline";
     case "charts":
       return focused ? "pie-chart" : "pie-chart-outline";
-    case "add":
+    case "scanner":
       return focused ? "scan" : "scan";
+    case "add":
+      return focused ? "add" : "add-outline";
     case "account":
       return focused ? "apps" : "apps-outline";
     default:

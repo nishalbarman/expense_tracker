@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Slot, Stack } from "expo-router";
 import {
   Platform,
@@ -15,6 +15,12 @@ import {
   ThemeProvider,
   DefaultTheme,
 } from "@react-navigation/native";
+import {
+  initializeAppCheck,
+  ReactNativeFirebaseAppCheckProvider,
+} from "@react-native-firebase/app-check";
+import { getApp } from "@react-native-firebase/app";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const lightTheme = {
   ...DefaultTheme,
@@ -26,6 +32,7 @@ const lightTheme = {
     // background: "#F5F6FA",
     card: "#FFFFFF",
     text: "#2F3542",
+    textBalance: "#4B5563",
     border: "#E6E8EF",
     notification: "#E53935",
     // extra tokens for app UI
@@ -50,16 +57,17 @@ const darkTheme = {
   dark: true,
   colors: {
     ...DarkTheme.colors,
-    primary: "#8AD7D1", // adjusted for contrast on dark
+    primary: "#000000ff", // adjusted for contrast on dark
     background: "#0E1116",
     card: "#151922",
-    text: "#E6EAF2",
+    text: "#cacacbff",
+    textBalance: "#E6EAF2",
     border: "#2A2F3A",
     notification: "#FF6B6B",
     // mirrored tokens for custom UI
     onPrimary: "#0B0F12",
     primaryContainer: "#1F2A2A",
-    secondary: "#71C7C2",
+    secondary: "#3e3e3eff",
     onSecondary: "#0B0F12",
     secondaryContainer: "#1B3634",
     onSecondaryContainer: "#DFF5F4",
@@ -79,9 +87,36 @@ export function getBottomContentPadding(insetBottom: number, extra = 16) {
   return BAR_HEIGHT + Math.max(insetBottom, 0) + extra;
 }
 
+const rnfbProvider = new ReactNativeFirebaseAppCheckProvider();
+rnfbProvider.configure({
+  android: {
+    provider: __DEV__ ? "debug" : "playIntegrity",
+    debugToken: "",
+    // debugToken: "",
+  },
+  apple: {
+    provider: __DEV__ ? "debug" : "appAttestWithDeviceCheckFallback",
+    debugToken:
+      "some token you have configured for your project firebase web console",
+  },
+  web: {
+    provider: "reCaptchaV3",
+    siteKey: "unknown",
+  },
+});
+
 export default function AppLayout() {
   const colorScheme = useColorScheme();
+  // const [themePreference, setThemePreference] = useState<string>(
+  //   !!colorScheme ? colorScheme : "light"
+  // );
+
   // const theme = colorScheme === "dark" ? darkTheme : lightTheme;
+  // const theme = colorScheme === "dark" ? lightTheme : darkTheme;
+  // const [theme, setTheme] = useState(
+  //   themePreference === "dark" ? darkTheme : lightTheme
+  // );
+
   const theme = lightTheme;
 
   RNStatusBar.setBarStyle("light-content");
@@ -90,9 +125,40 @@ export default function AppLayout() {
     RNStatusBar.setTranslucent(false);
   }
 
-  const GRADIENT = useMemo(() => {
-    return [theme.colors.primary, theme.colors.secondary];
-  }, [theme.colors]);
+  useEffect(() => {
+    (async () => {
+      const appCheck = await initializeAppCheck(getApp(), {
+        provider: rnfbProvider,
+        isTokenAutoRefreshEnabled: true,
+      });
+
+      // try {
+      //   // `appCheckInstance` is the saved return value from initializeAppCheck
+      //   const { token } = await appCheck.getToken(true);
+
+      //   if (token.length > 0) {
+      //     console.log("AppCheck verification passed");
+      //   }
+      // } catch (error) {
+      //   console.log("AppCheck verification failed");
+      // }
+    })();
+  }, []);
+
+  // useEffect(() => {
+  //   AsyncStorage.getItem("themePreference").then((preference) => {
+  //     if (!preference) {
+  //       AsyncStorage.setItem("themePreference", themePreference);
+  //       setThemePreference(themePreference);
+  //     } else {
+  //       setThemePreference(preference);
+  //     }
+  //   });
+  // }, []);
+
+  // useEffect(() => {
+  //   setTheme(themePreference === "dark" ? darkTheme : lightTheme);
+  // }, [themePreference]);
 
   return (
     <ThemeProvider value={theme}>

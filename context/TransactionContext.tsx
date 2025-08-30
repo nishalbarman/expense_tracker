@@ -11,7 +11,7 @@ import React, {
 import "react-native-get-random-values";
 import Toast from "react-native-toast-message";
 import { v4 as uuidv4 } from "uuid";
-import { sampleTransactions } from "../data/transactionCategories";
+// import { sampleTransactions } from "../data/transactionCategories";
 import type { Transaction, TransactionContextType } from "../types";
 
 const TransactionContext = createContext<TransactionContextType | undefined>(

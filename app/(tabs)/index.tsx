@@ -88,12 +88,12 @@ export default function HomeScreen(): JSX.Element {
     [transactions]
   );
 
-  const GRADIENT = useMemo(() => {
-    return [
-      theme.colors.primary,
-      theme.colors.secondary || theme.colors.primary,
-    ];
-  }, [theme.colors]);
+  // const GRADIENT = useMemo(() => {
+  //   return [
+  //     theme.colors.primary,
+  //     theme.colors.secondary || theme.colors.primary,
+  //   ];
+  // }, [theme.colors]);
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>
@@ -107,27 +107,24 @@ export default function HomeScreen(): JSX.Element {
         showsVerticalScrollIndicator={false}>
         {/* Header section sits inside the same ScrollView */}
         <LinearGradient
-          colors={GRADIENT}
+          colors={[theme.colors.primary, theme.colors.secondary]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[styles.hero, { paddingTop: insets.top + 12 }]}>
-          <View style={styles.heroHeader}>
+          <View style={[styles.heroHeader, { backgroundColor: "transparent" }]}>
             <View>
               <Text style={styles.helloSmall}>Welcome</Text>
             </View>
-            {/* <TouchableOpacity style={styles.badgeIcon} activeOpacity={0.7}>
-              <Ionicons
-                name="notifications-outline"
-                size={18}
-                color="#FFFFFF"
-              />
-            </TouchableOpacity> */}
+            <TouchableOpacity style={styles.badgeIcon} activeOpacity={0.7}>
+              {/* <Ionicons name="partly-sunny" size={18} color="#FFFFFF" /> */}
+              <Ionicons name="cloudy-night" size={18} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
 
           {/* Balance slab */}
           <Animated.View
             entering={FadeInUp.delay(120).duration(600)}
-            style={[styles.slabShadow, { backgroundColor: "#fffaeeff" }]}>
+            style={[styles.slabShadow, { backgroundColor: theme.colors.card }]}>
             <View style={styles.balanceSlab}>
               <View style={styles.balanceTopRow}>
                 <Text style={styles.balanceLabel}>Current Balance</Text>
@@ -137,7 +134,11 @@ export default function HomeScreen(): JSX.Element {
                   color="#4B5563"
                 />
               </View>
-              <Text style={[styles.balanceAmount, { color: "#111827" }]}>
+              <Text
+                style={[
+                  styles.balanceAmount,
+                  { color: theme.colors.textBalance },
+                ]}>
                 ₹{balance.toFixed(2)}
               </Text>
 
@@ -181,6 +182,14 @@ export default function HomeScreen(): JSX.Element {
         {/* Quick tiles */}
         <View style={styles.quickGrid}>
           <QuickTile
+            color="#F1F5F9"
+            iconColor="#475569"
+            icon="scan"
+            title="Scan Bill"
+            onPress={() => router.push("/scanner")}
+          />
+
+          <QuickTile
             color="#EEF2FF"
             iconColor="#6366F1"
             icon="wallet-outline"
@@ -201,13 +210,13 @@ export default function HomeScreen(): JSX.Element {
             title="History"
             onPress={() => router.push("/history")}
           />
-          <QuickTile
+          {/* <QuickTile
             color="#F1F5F9"
             iconColor="#475569"
             icon="settings-outline"
             title="Account"
             onPress={() => router.push("/account")}
-          />
+          /> */}
         </View>
 
         {/* Recent Transactions */}
@@ -354,7 +363,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   balanceSlab: {
-    backgroundColor: "#FFFFFF",
+    // backgroundColor: "#FFFFFF",
     borderRadius: 18,
     paddingVertical: 16,
     paddingHorizontal: 16,

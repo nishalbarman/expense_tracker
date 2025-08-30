@@ -6,7 +6,10 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "FIREBASE_APP_CHECK_DEBUG_TOKEN": "59E0AC3B-C562-45E0-86F9-743B3FA14C3E"
+      }
     },
     "preview": {
       "distribution": "internal"
