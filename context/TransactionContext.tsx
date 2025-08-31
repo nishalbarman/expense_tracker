@@ -101,20 +101,14 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
       const storedTransactions = await mmkvStorage.getItem("transactions");
 
       if (storedTransactions) {
-        setTransactions(() => JSON.parse(storedTransactions));
+        setTransactions(JSON.parse(storedTransactions));
       } else {
-        /**
-         * Use sample data if no stored transactions
-         */
-        // const initializedTransactions = sampleTransactions.map((tx) => ({
-        //   ...tx,
-        //   synced: false, // Ensure sample transactions are marked as unsynced
-        // }));
-        // setTransactions(initializedTransactions);
-        // await mmkvStorage.setItem(
-        //   "transactions",
-        //   JSON.stringify(initializedTransactions)
-        // );
+        // No local transactions → fetch from server
+        const lastSyncTime = new Date(0).toISOString(); // fetch all
+        const serverTransactions = await fetchServerTransactions(lastSyncTime);
+        setTransactions(serverTransactions);
+        await saveTransactions(serverTransactions);
+        await updateLastSyncTime(new Date().toISOString());
       }
     } catch (error) {
       console.error("Error loading transactions:", error);
@@ -309,17 +303,21 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
    */
   const mergeTransactions = async (serverTransactions: Transaction[]) => {
     try {
-      const localTransactionsMap = new Map(
-        transactions.map((tx) => [tx.id, tx])
-      );
+      setTransactions((prevTransactions) => {
+        const localTransactionsMap = new Map(
+          prevTransactions.map((tx) => [tx.id, tx])
+        );
+        const merged = [...prevTransactions];
 
-      serverTransactions.forEach((serverTx) => {
-        if (!localTransactionsMap.has(serverTx.id)) {
-          transactions.push({ ...serverTx, synced: true });
-        }
+        serverTransactions.forEach((serverTx) => {
+          if (!localTransactionsMap.has(serverTx.id)) {
+            merged.push({ ...serverTx, synced: true });
+          }
+        });
+
+        saveTransactions(merged).catch(() => {});
+        return merged;
       });
-
-      return transactions;
     } catch (error) {
       console.error("Error merging transactions:", error);
       throw error;

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   StyleSheet,
   ScrollView,
@@ -9,7 +9,6 @@ import {
   Text,
   TextInput,
   ActivityIndicator,
-  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTransactions } from "../../context/TransactionContext";
@@ -19,6 +18,10 @@ import { transactionCategories } from "../../data/transactionCategories";
 import { useForm, Controller } from "react-hook-form";
 import { useTheme } from "@react-navigation/native";
 import Toast from "react-native-toast-message";
+import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAppSelector } from "@/redux/hooks";
 
 type FormValues = {
   type: "expense" | "income";
@@ -91,6 +94,7 @@ const SegmentedButtons = ({ value, onValueChange, buttons, style }: any) => {
 const CustomTextInput = ({
   label,
   value,
+  readOnly = false,
   onChangeText,
   error,
   leftPrefix,
@@ -110,9 +114,11 @@ const CustomTextInput = ({
 
   return (
     <View style={[styles.inputContainer, style]}>
-      <Text style={[styles.inputLabel, { color: theme.colors.text }]}>
-        {label}
-      </Text>
+      {label && (
+        <Text style={[styles.inputLabel, { color: theme.colors.text }]}>
+          {label}
+        </Text>
+      )}
       <View
         style={[
           styles.inputWrapper,
@@ -132,6 +138,7 @@ const CustomTextInput = ({
           </Text>
         )}
         <TextInput
+          readOnly={readOnly}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -175,6 +182,7 @@ const CustomButton = ({
   ...props
 }: any) => {
   const theme = useTheme();
+  const {themePref} = useAppSelector(state=>state.theme)
 
   const buttonStyle = [
     styles.button,
@@ -182,7 +190,8 @@ const CustomButton = ({
       backgroundColor: disabled
         ? theme.colors.text + "40"
         : theme.colors.primary,
-      borderWidth: 0,
+      borderWidth: 1,
+      borderColor: theme.colors.text + "40",
     },
     mode === "text" && {
       backgroundColor: "transparent",
@@ -192,8 +201,8 @@ const CustomButton = ({
     style,
   ];
 
-  const containedText = (theme.colors as any).onPrimary ?? theme.colors.card;
-  const textColor = mode === "contained" ? containedText : theme.colors.primary;
+  const containedText = "#ffffff";
+  const textColor = mode === "contained" ? containedText : theme.colors.text;
 
   return (
     <TouchableOpacity
@@ -260,13 +269,62 @@ const CustomChip = ({ children, onPress, mode = "outlined" }: any) => {
   );
 };
 
+const CustomSelectInput = ({
+  label,
+  value,
+  placeholder = "Select an option",
+  error,
+  rightIcon = "chevron-down",
+  onPress,
+  style,
+}: any) => {
+  const theme = useTheme();
+
+  return (
+    <View style={[styles.container2, style]}>
+      {label && (
+        <Text style={[styles.label, { color: theme.colors.text }]}>
+          {label}
+        </Text>
+      )}
+
+      <TouchableOpacity
+        style={[
+          styles.selector,
+          {
+            borderColor: error ? "#ef4444" : theme.colors.border,
+            backgroundColor: theme.colors.card,
+          },
+        ]}
+        activeOpacity={0.7}
+        onPress={onPress}>
+        <Text
+          style={{
+            flex: 1,
+            color: value ? theme.colors.text : theme.colors.text + "80",
+          }}
+          numberOfLines={1}>
+          {value || placeholder}
+        </Text>
+
+        {rightIcon && (
+          <Ionicons name={rightIcon} size={20} color={theme.colors.text} />
+        )}
+      </TouchableOpacity>
+
+      {error && (
+        <Text style={[styles.errorText, { color: "#ef4444" }]}>{error}</Text>
+      )}
+    </View>
+  );
+};
+
 export default function AddTransactionScreen(): JSX.Element {
   const pathname = usePathname();
   const { addTransaction } = useTransactions();
   const theme = useTheme();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [categorySheetVisible, setCategorySheetVisible] = useState(false);
   const [categoryQuery, setCategoryQuery] = useState("");
 
   const {
@@ -351,254 +409,235 @@ export default function AddTransactionScreen(): JSX.Element {
     }
   };
 
+  const bottomSheetRef = useRef<BottomSheet>(null);
+  const snapPoints = useMemo(() => ["80%", "100%"], []);
+
+  const openCategorySheet = () => {
+    bottomSheetRef.current?.snapToIndex(0);
+  };
+
+  const closeCategorySheet = () => {
+    bottomSheetRef.current?.close();
+  };
+
+  const insets = useSafeAreaInsets();
+
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-      keyboardShouldPersistTaps="handled">
-      <Animated.View entering={FadeInUp.delay(120).duration(600)}>
-        {/* Type toggle */}
-        <Controller
-          control={control}
-          name="type"
-          render={({ field: { onChange, value } }) => (
-            <SegmentedButtons
-              value={value}
-              onValueChange={(val) => onChange(val as FormValues["type"])}
-              buttons={[
-                { value: "expense", label: "Expense", icon: "arrow-down" },
-                { value: "income", label: "Income", icon: "arrow-up" },
-              ]}
-              style={styles.segmentedButtons}
-            />
-          )}
-        />
-
-        {/* Amount with currency prefix */}
-        <Controller
-          control={control}
-          name="amount"
-          rules={{
-            required: "Amount is required",
-            validate: (v) => {
-              const n = parseFloat(v);
-              if (Number.isNaN(n)) return "Enter a number";
-              if (n <= 0) return "Amount must be greater than 0";
-              if (n > 100000000) return "Amount too large";
-              return true;
-            },
-          }}
-          render={({ field: { onChange, value } }) => (
-            <>
-              <CustomTextInput
-                label="Amount"
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ScrollView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        keyboardShouldPersistTaps="handled">
+        <Animated.View entering={FadeInUp.delay(120).duration(600)}>
+          {/* Type toggle */}
+          <Controller
+            control={control}
+            name="type"
+            render={({ field: { onChange, value } }) => (
+              <SegmentedButtons
                 value={value}
-                onChangeText={(t) => onChange(formatAmountInput(t))}
-                keyboardType={Platform.select({
-                  ios: "decimal-pad",
-                  android: "numeric",
-                })}
-                error={!!errors.amount}
-                leftPrefix={CURRENCY}
-                placeholder="0.00"
-                returnKeyType="next"
+                onValueChange={(val) => onChange(val as FormValues["type"])}
+                buttons={[
+                  { value: "expense", label: "Expense", icon: "arrow-down" },
+                  { value: "income", label: "Income", icon: "arrow-up" },
+                ]}
+                style={styles.segmentedButtons}
               />
-              {errors.amount && (
-                <Text style={styles.errorText}>{errors.amount.message}</Text>
-              )}
-            </>
-          )}
-        />
+            )}
+          />
 
-        {/* Category picker */}
-        <Controller
-          control={control}
-          name="category"
-          rules={{ required: "Category is required" }}
-          render={({ field: { onChange, value } }) => (
-            <>
+          {/* Amount */}
+          <Controller
+            control={control}
+            name="amount"
+            rules={{
+              required: "Amount is required",
+              validate: (v) => {
+                const n = parseFloat(v);
+                if (Number.isNaN(n)) return "Enter a number";
+                if (n <= 0) return "Amount must be greater than 0";
+                if (n > 100000000) return "Amount too large";
+                return true;
+              },
+            }}
+            render={({ field: { onChange, value } }) => (
+              <>
+                <CustomTextInput
+                  label="Amount"
+                  value={value}
+                  onChangeText={(t) => onChange(formatAmountInput(t))}
+                  keyboardType={Platform.select({
+                    ios: "decimal-pad",
+                    android: "numeric",
+                  })}
+                  error={!!errors.amount}
+                  leftPrefix={CURRENCY}
+                  placeholder="0.00"
+                  returnKeyType="next"
+                />
+                {errors.amount && (
+                  <Text style={styles.errorText}>{errors.amount.message}</Text>
+                )}
+              </>
+            )}
+          />
+
+          {/* Category picker */}
+          <Controller
+            control={control}
+            name="category"
+            rules={{ required: "Category is required" }}
+            render={({ field: { onChange, value } }) => (
+              <>
+                <CustomSelectInput
+                  label="Category"
+                  value={value}
+                  placeholder="Select category"
+                  error={errors.category?.message}
+                  rightIcon="chevron-down"
+                  onPress={openCategorySheet}
+                />
+                {errors.category && (
+                  <Text style={styles.errorText}>
+                    {errors.category.message}
+                  </Text>
+                )}
+              </>
+            )}
+          />
+
+          {/* Notes */}
+          <Controller
+            control={control}
+            name="notes"
+            render={({ field: { onChange, value } }) => (
               <CustomTextInput
-                label="Category"
+                label="Notes"
                 value={value}
-                error={!!errors.category}
-                rightIcon="chevron-down"
-                onRightIconPress={() => setCategorySheetVisible(true)}
-                onFocus={() => setCategorySheetVisible(true)}
-                placeholder="Select category"
+                onChangeText={onChange}
+                multiline
+                numberOfLines={3}
+                placeholder={
+                  typeValue === "expense"
+                    ? "e.g., Lunch with team"
+                    : "e.g., Project payout"
+                }
               />
-              {errors.category && (
-                <Text style={styles.errorText}>{errors.category.message}</Text>
-              )}
+            )}
+          />
 
-              <Modal
-                visible={categorySheetVisible}
-                animationType="slide"
-                transparent
-                onRequestClose={() => setCategorySheetVisible(false)}>
-                <View
-                  style={[
-                    styles.modalOverlay,
-                    {
-                      backgroundColor: theme.dark
-                        ? "rgba(0,0,0,0.6)"
-                        : "rgba(0,0,0,0.5)",
-                    },
-                  ]}>
-                  <View
-                    style={[
-                      styles.sheetContainer,
-                      { backgroundColor: theme.colors.card },
-                    ]}>
-                    <Text
-                      style={[styles.sheetTitle, { color: theme.colors.text }]}>
-                      Choose {typeValue[0].toLocaleUpperCase()}
-                      {typeValue.substring(1)} Category
-                    </Text>
+          {/* Submit */}
+          <CustomButton
+            mode="contained"
+            onPress={handleSubmit(onSubmit)}
+            style={styles.submitButton}
+            disabled={
+              !isValid ||
+              !isDirty ||
+              isSubmitting ||
+              !amountValue ||
+              !categoryValue
+            }
+            icon={
+              isSubmitting
+                ? undefined
+                : typeValue === "expense"
+                ? "arrow-down"
+                : "arrow-up"
+            }>
+            {isSubmitting ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator
+                  color={(theme.colors as any).onPrimary ?? "#FFFFFF"}
+                  size="small"
+                />
+                <Text
+                  style={{
+                    color: (theme.colors as any).onPrimary ?? "#FFFFFF",
+                    marginLeft: 8,
+                  }}>
+                  Saving…
+                </Text>
+              </View>
+            ) : (
+              "Add Transaction"
+            )}
+          </CustomButton>
+        </Animated.View>
+      </ScrollView>
 
-                    <CustomTextInput
-                      placeholder="Search category"
-                      value={categoryQuery}
-                      onChangeText={setCategoryQuery}
-                      leftPrefix="🔍"
-                      style={{ marginBottom: 12 }}
-                    />
+      {/* Bottom Sheet OUTSIDE ScrollView */}
+      <BottomSheet
+        ref={bottomSheetRef}
+        index={-1}
+        snapPoints={snapPoints}
+        enablePanDownToClose={true}
+        backgroundStyle={{ backgroundColor: theme.colors.card }}>
+        <View style={{ padding: 16 }}>
+          <Text style={[styles.sheetTitle, { color: theme.colors.text }]}>
+            Choose {typeValue[0].toUpperCase()}
+            {typeValue.substring(1)} Category
+          </Text>
 
-                    {/* Recent quick chips */}
-                    {recentCategories.length > 0 && (
-                      <View style={styles.chipContainer}>
-                        {recentCategories.map((c) => (
-                          <CustomChip
-                            key={c}
-                            onPress={() => {
-                              onChange(c);
-                              setValue("category", c, {
-                                shouldValidate: true,
-                                shouldDirty: true,
-                              });
-                              setCategorySheetVisible(false);
-                            }}>
-                            <Text style={{ color: theme.colors.text }}>
-                              {c}
-                            </Text>
-                          </CustomChip>
-                        ))}
-                      </View>
-                    )}
+          {/* Search */}
+          <CustomTextInput
+            placeholder="Search category"
+            value={categoryQuery}
+            onChangeText={setCategoryQuery}
+            leftPrefix="🔍"
+            style={{ marginBottom: 12 }}
+          />
 
-                    <ScrollView style={{ maxHeight: 300 }}>
-                      {filteredCategories.map((cat) => {
-                        const selected = cat === value;
-                        return (
-                          <CustomButton
-                            key={cat}
-                            mode={selected ? "contained" : "text"}
-                            onPress={() => {
-                              onChange(cat);
-                              setValue("category", cat, {
-                                shouldValidate: true,
-                                shouldDirty: true,
-                              });
-                              setCategorySheetVisible(false);
-                            }}
-                            style={{
-                              justifyContent: "flex-start",
-                              marginBottom: 4,
-                            }}>
-                            <Text
-                              style={{
-                                color: theme.colors.text,
-                              }}>
-                              {cat}
-                            </Text>
-                          </CustomButton>
-                        );
-                      })}
-                      {filteredCategories.length === 0 && (
-                        <Text
-                          style={[
-                            styles.noResultsText,
-                            { color: theme.colors.text },
-                          ]}>
-                          No categories match your search
-                        </Text>
-                      )}
-                    </ScrollView>
-
-                    <View style={{ marginTop: 8 }}>
-                      <CustomButton
-                        mode="text"
-                        style={{
-                          color: theme.colors.tabActive,
-                        }}
-                        onPress={() => setCategorySheetVisible(false)}>
-                        Close
-                      </CustomButton>
-                    </View>
-                  </View>
-                </View>
-              </Modal>
-            </>
-          )}
-        />
-
-        {/* Notes */}
-        <Controller
-          control={control}
-          name="notes"
-          render={({ field: { onChange, value } }) => (
-            <CustomTextInput
-              label="Notes"
-              value={value}
-              onChangeText={onChange}
-              multiline
-              numberOfLines={3}
-              placeholder={
-                typeValue === "expense"
-                  ? "e.g., Lunch with team"
-                  : "e.g., Project payout"
-              }
-            />
-          )}
-        />
-
-        {/* Submit */}
-        <CustomButton
-          mode="contained"
-          onPress={handleSubmit(onSubmit)}
-          style={styles.submitButton}
-          disabled={
-            !isValid ||
-            !isDirty ||
-            isSubmitting ||
-            !amountValue ||
-            !categoryValue
-          }
-          icon={
-            isSubmitting
-              ? undefined
-              : typeValue === "expense"
-              ? "arrow-down"
-              : "arrow-up"
-          }>
-          {isSubmitting ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator
-                color={(theme.colors as any).onPrimary ?? "#FFFFFF"}
-                size="small"
-              />
-              <Text
-                style={{
-                  color: (theme.colors as any).onPrimary ?? "#FFFFFF",
-                  marginLeft: 8,
-                }}>
-                Saving…
-              </Text>
+          {/* Recent quick chips */}
+          {recentCategories.length > 0 && (
+            <View style={styles.chipContainer}>
+              {recentCategories.map((c) => (
+                <CustomChip
+                  key={c}
+                  onPress={() => {
+                    setValue("category", c, {
+                      shouldValidate: true,
+                      shouldDirty: true,
+                    });
+                    closeCategorySheet();
+                  }}>
+                  <Text style={{ color: theme.colors.text }}>{c}</Text>
+                </CustomChip>
+              ))}
             </View>
-          ) : (
-            "Add Transaction"
           )}
-        </CustomButton>
-      </Animated.View>
-    </ScrollView>
+        </View>
+
+        <BottomSheetScrollView
+          style={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 70 }}>
+          {filteredCategories.map((cat) => (
+            <CustomButton
+              key={cat}
+              mode={cat === categoryValue ? "contained" : "text"}
+              onPress={() => {
+                setValue("category", cat, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                });
+                closeCategorySheet();
+              }}
+              style={{ justifyContent: "flex-start", marginBottom: 4 }}>
+              {cat}
+            </CustomButton>
+          ))}
+          {filteredCategories.length === 0 && (
+            <Text style={[styles.noResultsText, { color: theme.colors.text }]}>
+              No categories match your search
+            </Text>
+          )}
+        </BottomSheetScrollView>
+
+        <View style={{ padding: 16, paddingBottom: insets.bottom + 111 }}>
+          <CustomButton mode="text" onPress={closeCategorySheet}>
+            <Text style={{ color: theme.colors.tabActive }}>Close</Text>
+          </CustomButton>
+        </View>
+      </BottomSheet>
+    </GestureHandlerRootView>
   );
 }
 
@@ -606,6 +645,28 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
+  },
+
+  container2: {
+    width: "100%",
+    marginBottom: 12,
+  },
+  label: {
+    marginBottom: 6,
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  selector: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderRadius: 8,
+  },
+  errorText: {
+    marginTop: 4,
+    fontSize: 12,
   },
 
   // Segmented Buttons
@@ -659,6 +720,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginRight: 8,
   },
+
   textInput: {
     flex: 1,
     fontSize: 16,

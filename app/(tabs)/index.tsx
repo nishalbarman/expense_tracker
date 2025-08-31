@@ -103,6 +103,8 @@ export default function HomeScreen(): JSX.Element {
     dispatch(toggleTheme());
   };
 
+  // console.log("themePref");
+
   return (
     <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>
       <StatusBar barStyle="light-content" />
@@ -260,14 +262,16 @@ export default function HomeScreen(): JSX.Element {
             View all
           </CustomButton>
         </View>
-
         <Animated.View
-          style={{ paddingHorizontal: 15 }}
+          style={[{ paddingHorizontal: 15 }]}
           entering={FadeInUp.delay(150).duration(600)}>
           <CustomCard
-            style={
-              themePref === "dark" ? styles.cardListDark : styles.cardListLight
-            }>
+            style={[
+              styles.cardList,
+              {
+                backgroundColor: theme.colors.card,
+              },
+            ]}>
             <View style={[styles.cardContent]}>
               {recent.length > 0 ? (
                 recent.map((t, idx) => (
@@ -327,7 +331,7 @@ const styles = StyleSheet.create({
 
   // Card Component
   card: {
-    backgroundColor: "#FFFFFF",
+    // backgroundColor: "#FFFFFF",
     borderRadius: 16,
     ...Platform.select({
       ios: {
@@ -451,8 +455,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 16, fontWeight: "800", color: "#0F172A" },
 
-  cardListLight: { borderRadius: 16, backgroundColor: "#FFFFFF" },
-  cardListDark: { borderRadius: 16, backgroundColor: "#272727ff" },
+  cardList: { borderRadius: 16, backgroundColor: "#FFFFFF" },
+  // cardListDark: { borderRadius: 16, backgroundColor: "#272727ff" },
   rowWrap: { paddingVertical: 2 },
   rowDivider: {
     height: 1,

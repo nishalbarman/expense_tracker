@@ -24,7 +24,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
 import { persistor, store } from "@/redux/store";
-import { useAppSelector } from "@/redux/hooks";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks";
+import { setTheme } from "@/redux/slices/themeSlice";
 
 const lightTheme = {
   ...DefaultTheme,
@@ -164,6 +165,14 @@ function AppContainer() {
     RNStatusBar.setBackgroundColor(theme.colors.primary);
     RNStatusBar.setTranslucent(false);
   }
+
+  const dispatch = useAppDispatch();
+
+  // useEffect(() => {
+  //   if (!themePref) {
+  //     dispatch(setTheme(!!colorScheme ? colorScheme : "light"));
+  //   }
+  // }, [themePref, theme]);
 
   useEffect(() => {
     (async () => {

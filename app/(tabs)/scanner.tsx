@@ -204,20 +204,50 @@ export default function ScanImageScreen(): JSX.Element {
     });
 
     const systemIntruction = `
-      You are an AI that extracts structured financial information from text.
-      The text will describe a transaction. From the text, identify and return these fields in JSON format:
+      You are an AI that extracts structured financial information from text or images. 
+      The input may be a written transaction description or content from documents such as bills, salary slips, or product price tags. 
 
-      - amount: numeric value of money (no currency symbol).
-      - category: main category from "${transactionCategories.expense.join(
+      From the input, identify and return the following fields in JSON format:
+
+      - amount: The numeric value of money (without any currency symbol).
+      - category: The main category of the transaction, selected from "${transactionCategories.expense.join(
         ","
       )},${transactionCategories.income.join(",")}".
-      - note: additional description from the text.
-      - type: "expense" or "income".
+      - note: Any additional description or context found in the text or image.
+      - type: Either "expense" or "income" (determine from the context).
 
-      If any field is missing, leave it as an empty string.
+      Rules:
+      - If price-related information (e.g., bill total, salary amount, product price) is found, return a JSON with status=true and the extracted fields.
+      - If a field cannot be determined, leave it as an empty string.
+      - If no transaction or price-related data is present, return JSON with status=false and an error message.
+      - Always return data in strict JSON format.
 
-      If the text is not a transaction, return a JSON with status=false and an error message.
-    `;
+      ✅ Success Example Input:  
+        "Bought groceries for 500 rupees at Reliance Fresh"  
+
+      ✅ Example Output:  
+      {
+        "status": true,
+        "error": "",
+        "amount": "500",
+        "category": "Groceries",
+        "note": "Bought groceries at Reliance Fresh",
+        "type": "expense"
+      }
+
+      ❌ Failed Example Input:  
+        "I am a React Native developer working in an Android application."  
+
+      ❌ Example Output:  
+      {
+        "status": false,
+        "error": "No transaction or price-related information found.",
+        "amount": "",
+        "category": "",
+        "note": "",
+        "type": ""
+      }
+      `;
 
     const model = getGenerativeModel(ai, {
       model: "gemini-1.5-flash",
@@ -352,13 +382,13 @@ export default function ScanImageScreen(): JSX.Element {
                 {
                   backgroundColor: theme.dark
                     ? "rgba(255,255,255,0.08)"
-                    : (theme.colors as any).primaryContainer ?? "#E0F8F6",
+                    : "#E0F8F6",
                 },
               ]}>
               <Ionicons
                 name="scan-outline"
                 size={64}
-                color={theme.dark ? theme.colors.text : theme.colors.primary}
+                color={theme.dark ? theme.colors.text : "#4ECDC4"}
               />
             </View>
             <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
