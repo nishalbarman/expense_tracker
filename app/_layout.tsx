@@ -24,6 +24,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
 import { persistor, store } from "@/redux/store";
+import { useAppSelector } from "@/redux/hooks";
 
 const lightTheme = {
   ...DefaultTheme,
@@ -33,6 +34,20 @@ const lightTheme = {
     primary: "#429690",
     background: "#fffff7",
     // background: "#F5F6FA",
+
+    // quick tile
+    quickTile1: "#F1F5F9",
+    quickTile2: "#EEF2FF",
+    quickTile3: "#FFF7ED",
+    quickTile4: "#E0F7FA",
+
+    quickTileText1: "#111827",
+    quickTileText2: "#111827",
+    quickTileText3: "#111827",
+    quickTileText4: "#111827",
+
+    tabActive: "#429690",
+
     card: "#FFFFFF",
     text: "#2F3542",
     textBalance: "#4B5563",
@@ -59,28 +74,44 @@ const darkTheme = {
   ...DarkTheme,
   dark: true,
   colors: {
-    ...DarkTheme.colors,
-    primary: "#000000ff", // adjusted for contrast on dark
-    background: "#0E1116",
-    card: "#151922",
-    text: "#cacacbff",
-    textBalance: "#E6EAF2",
-    border: "#2A2F3A",
-    notification: "#FF6B6B",
-    // mirrored tokens for custom UI
-    onPrimary: "#0B0F12",
-    primaryContainer: "#1F2A2A",
-    secondary: "#3e3e3eff",
-    onSecondary: "#0B0F12",
-    secondaryContainer: "#1B3634",
-    onSecondaryContainer: "#DFF5F4",
-    surface: "#151922",
-    onSurface: "#E6EAF2",
-    surfaceVariant: "#222735",
-    onSurfaceVariant: "#A0A6B3",
-    outline: "#2A2F3A",
-    error: "#FF6B6B",
-    onError: "#0B0F12",
+    ...DefaultTheme.colors,
+    primary: "#03211fff", // Keep same for brand identity
+    background: "#121212", // Dark background
+    // background: "#0D1117",
+
+    // quick tile
+    quickTile1: "#1E293B", // Dark slate
+    quickTile2: "#3f180cff", // Deep indigo
+    quickTile3: "#3C2A1E", // Dark brown
+    quickTile4: "#004D40", // Teal-ish dark
+
+    quickTileText1: "#F9FAFB", // Light text
+    quickTileText2: "#F9FAFB",
+    quickTileText3: "#F9FAFB",
+    quickTileText4: "#F9FAFB",
+
+    tabActive: "#429690", // Highlight stays teal
+
+    card: "#1E1E1E", // Dark card background
+    text: "#E5E7EB", // Light gray text
+    textBalance: "#D1D5DB", // Slightly lighter gray
+    border: "#2D2D2D", // Dark border
+    notification: "#EF4444", // Keep red (works on dark)
+
+    // extra tokens for app UI
+    onPrimary: "#FFFFFF",
+    primaryContainer: "#1B3A37", // Dark teal variant
+    secondary: "#021816ff", // Lighter teal for dark mode
+    onSecondary: "#0F0F0F", // Dark text on light secondary
+    secondaryContainer: "#134E4A", // Deep teal container
+    onSecondaryContainer: "#E5E7EB", // Light gray text
+    surface: "#1E1E1E", // Matches card
+    onSurface: "#E5E7EB", // Light text
+    surfaceVariant: "#2D2D2D", // Darker gray surface
+    onSurfaceVariant: "#CBD5E1", // Muted light gray text
+    outline: "#374151", // Subtle outline
+    error: "#CF6679", // Material dark red
+    onError: "#000000", // Black text for contrast
   },
 };
 
@@ -111,17 +142,22 @@ rnfbProvider.configure({
 function AppContainer() {
   const colorScheme = useColorScheme();
 
-  const [themePreference, setThemePreference] = useState<string>(
-    !!colorScheme ? colorScheme : "light"
-  );
+  // const [themePreference, setThemePreference] = useState<string>(
+  //   !!colorScheme ? colorScheme : "light"
+  // );
 
-  // const theme = colorScheme === "dark" ? darkTheme : lightTheme;
-  // const theme = colorScheme === "dark" ? lightTheme : darkTheme;
   // const [theme, setTheme] = useState(
   //   themePreference === "dark" ? darkTheme : lightTheme
   // );
 
   // const theme = lightTheme;
+  const { themePref } = useAppSelector((state) => state.theme);
+
+  const theme = useMemo(() => {
+    let currentTheme = themePref || (!!colorScheme ? colorScheme : "light");
+
+    return currentTheme === "dark" ? darkTheme : lightTheme;
+  }, [themePref]);
 
   RNStatusBar.setBarStyle("light-content");
   if (Platform.OS === "android") {
@@ -165,20 +201,19 @@ function AppContainer() {
   // }, [themePreference]);
 
   return (
-    <Provider store={store}>
-      <PersistGate loading={null} persistor={persistor}>
-        <ThemeProvider value={theme}>
-          <TransactionProvider>
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="+not-found" />
-            </Stack>
-            <StatusBar style="auto" />
-            <Toast />
-          </TransactionProvider>
-        </ThemeProvider>
-      </PersistGate>
-    </Provider>
+    <ThemeProvider value={theme}>
+      <TransactionProvider>
+        <Stack
+          screenOptions={{
+            navigationBarColor: theme.colors.surface,
+          }}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="+not-found" />
+        </Stack>
+        <StatusBar style="auto" />
+        <Toast />
+      </TransactionProvider>
+    </ThemeProvider>
   );
 }
 

@@ -3,11 +3,13 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 export type ThemeMode = "light" | "dark" | null;
 
 export interface ThemeState {
-  theme: ThemeMode;
+  themePref: ThemeMode;
+  preferenceModifiedByUser: boolean;
 }
 
 const initialState: ThemeState = {
-  theme: null,
+  themePref: null,
+  preferenceModifiedByUser: false,
 };
 
 const themeSlice = createSlice({
@@ -15,10 +17,10 @@ const themeSlice = createSlice({
   initialState,
   reducers: {
     toggleTheme: (state) => {
-      state.theme = state.theme === "light" ? "dark" : "light";
+      state.themePref = state.themePref === "light" ? "dark" : "light";
     },
     setTheme: (state, action: PayloadAction<ThemeMode>) => {
-      state.theme = action.payload;
+      state.themePref = action.payload;
     },
   },
 });

@@ -20,6 +20,9 @@ import Svg, { Path } from "react-native-svg";
 import { TransactionProvider } from "@/context/TransactionContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@react-navigation/native";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks";
+import Animated from "react-native-reanimated";
+import { toggleTheme } from "@/redux/slices/themeSlice";
 
 export const BAR_HEIGHT = 72;
 const FAB_SIZE = 64;
@@ -33,9 +36,19 @@ type RouteName = "index" | "add" | "scanner" | "history" | "charts" | "account";
 export default function AppLayout() {
   const theme = useTheme();
 
+  const { themePref } = useAppSelector((state) => state.theme);
+
+  const dispatch = useAppDispatch();
+
+  const handleToggleTheme = () => {
+    dispatch(toggleTheme());
+  };
+
   const GRADIENT = useMemo(() => {
     return [theme.colors.primary, theme.colors.secondary];
   }, [theme.colors]);
+
+  const insets = useSafeAreaInsets();
 
   return (
     <TransactionProvider>
@@ -46,6 +59,7 @@ export default function AppLayout() {
           headerTitleStyle: { color: "white", fontWeight: "700" },
           headerTintColor: "white",
           tabBarStyle: { display: "none" },
+
           headerBackground: (props) => {
             return (
               <LinearGradient
@@ -63,18 +77,118 @@ export default function AppLayout() {
           name="index"
           options={{ title: "Dashboard", headerShown: false }}
         />
-        <Tabs.Screen name="add" options={{ title: "Add New Transaction" }} />
-        <Tabs.Screen name="scanner" options={{ title: "Scanner" }} />
-        <Tabs.Screen name="history" options={{ title: "History" }} />
+        <Tabs.Screen
+          name="add"
+          options={{
+            title: "Add New Transaction",
+            headerShown: true,
+
+            header: () => {
+              return (
+                <LinearGradient
+                  colors={[theme.colors.primary, theme.colors.secondary]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.hero, { paddingTop: insets.top + 12 }]}>
+                  <Animated.View>
+                    <View
+                      style={[
+                        styles.heroHeader,
+                        { backgroundColor: "transparent" },
+                      ]}>
+                      <View>
+                        <Text style={[styles.helloSmall]}>Add Transaction</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={handleToggleTheme}
+                        style={styles.badgeIcon}
+                        activeOpacity={0.7}>
+                        {themePref === "dark" ? (
+                          <Ionicons
+                            name="partly-sunny"
+                            size={18}
+                            color="#FFFFFF"
+                          />
+                        ) : (
+                          <Ionicons
+                            name="cloudy-night"
+                            size={18}
+                            color="#FFFFFF"
+                          />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </Animated.View>
+                </LinearGradient>
+              );
+            },
+          }}
+        />
+        <Tabs.Screen
+          name="scanner"
+          options={{
+            title: "Scanner",
+            headerShown: true,
+            header: () => {
+              return (
+                <LinearGradient
+                  colors={[theme.colors.primary, theme.colors.secondary]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.hero, { paddingTop: insets.top + 12 }]}>
+                  <Animated.View>
+                    <View
+                      style={[
+                        styles.heroHeader,
+                        { backgroundColor: "transparent" },
+                      ]}>
+                      <View>
+                        <Text style={[styles.helloSmall]}>Scan Image</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={handleToggleTheme}
+                        style={styles.badgeIcon}
+                        activeOpacity={0.7}>
+                        {themePref === "dark" ? (
+                          <Ionicons
+                            name="partly-sunny"
+                            size={18}
+                            color="#FFFFFF"
+                          />
+                        ) : (
+                          <Ionicons
+                            name="cloudy-night"
+                            size={18}
+                            color="#FFFFFF"
+                          />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </Animated.View>
+                </LinearGradient>
+              );
+            },
+          }}
+        />
+        <Tabs.Screen
+          name="history"
+          options={{ title: "History", headerShown: false }}
+        />
         <Tabs.Screen
           name="charts"
           options={{
             title: "Analytics",
-            headerShown: true,
+            headerShown: false,
             headerShadowVisible: false,
           }}
         />
-        <Tabs.Screen name="account" options={{ title: "Account" }} />
+        <Tabs.Screen
+          name="account"
+          options={{
+            title: "Account",
+            headerShown: false,
+          }}
+        />
       </Tabs>
       <Toast />
     </TransactionProvider>
@@ -88,7 +202,7 @@ function CustomBottomBar({
   theme,
 }: any & { theme: any }) {
   const insets = useSafeAreaInsets();
-  const active = theme.colors.primary;
+  const active = theme.colors.tabActive;
   const inactive = theme.colors.onSurface + "99";
   const bg = theme.colors.surface;
 
@@ -99,18 +213,29 @@ function CustomBottomBar({
 
   const corner = 18;
   const R = FAB_SIZE / 2 + 8;
+  // const buildPath = (w: number, h: number) => {
+  //   if (!w) return "";
+  //   const cx = w / 2;
+  //   return [
+  //     `M0,${h}`,
+  //     `L0,${corner} Q0,0 ${corner},0`,
+  //     `L${w - corner},0 Q${w},0 ${w},${corner}`,
+  //     `L${w},${h}`,
+  //     "Z",
+  //     `M${cx},0 m${-R},0`,
+  //     `a${R},${R} 0 1,0 ${2 * R},0`,
+  //     `a${R},${R} 0 1,0 ${-2 * R},0`,
+  //   ].join(" ");
+  // };
   const buildPath = (w: number, h: number) => {
     if (!w) return "";
-    const cx = w / 2;
+    const corner = 18;
     return [
       `M0,${h}`,
       `L0,${corner} Q0,0 ${corner},0`,
       `L${w - corner},0 Q${w},0 ${w},${corner}`,
       `L${w},${h}`,
       "Z",
-      `M${cx},0 m${-R},0`,
-      `a${R},${R} 0 1,0 ${2 * R},0`,
-      `a${R},${R} 0 1,0 ${-2 * R},0`,
     ].join(" ");
   };
 
@@ -237,7 +362,7 @@ function CustomBottomBar({
           style={[
             styles.fab,
             {
-              backgroundColor: theme.colors.primary,
+              backgroundColor: theme.colors.tabActive,
               shadowColor: "#000",
               bottom: BAR_HEIGHT - FAB_SIZE / 2 + Math.max(insets.bottom, 0),
             },
@@ -272,6 +397,15 @@ function getIcon(
 }
 
 const styles = StyleSheet.create({
+  badgeIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   hero: {
     paddingHorizontal: 16,
     paddingBottom: 18,
@@ -280,9 +414,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
   },
-  helloSmall: { color: "rgba(255,255,255,0.9)", fontSize: 13 },
+  helloSmall: {
+    color: "rgba(255,255,255,0.9)",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
 
   wrapper: {
     position: "absolute",

@@ -10,10 +10,10 @@ interface TransactionItemProps {
 
 export const TransactionItem = ({ transaction }: TransactionItemProps) => {
   const theme = useTheme();
-  
+
   const iconColor =
     transaction.type === "income"
-      ? theme.colors.primary
+      ? theme.colors.tabActive
       : theme.colors.notification;
 
   return (
@@ -22,38 +22,25 @@ export const TransactionItem = ({ transaction }: TransactionItemProps) => {
         style={[
           styles.iconContainer,
           // { backgroundColor: iconColor + '20' } // Adding transparency for background
-        ]}
-      >
+        ]}>
         <Ionicons
-          name={
-            transaction.type === "income"
-              ? "add-circle"
-              : "remove-circle"
-          }
+          name={transaction.type === "income" ? "add-circle" : "remove-circle"}
           size={24}
           color={iconColor}
         />
       </View>
-      
+
       <View style={styles.transactionDetails}>
-        <Text 
-          style={[
-            styles.transactionCategory, 
-            { color: theme.colors.text }
-          ]}
-        >
+        <Text
+          style={[styles.transactionCategory, { color: theme.colors.text }]}>
           {transaction.category}
         </Text>
-        <Text 
-          style={[
-            styles.transactionDate, 
-            { color: theme.colors.text + '60' }
-          ]}
-        >
+        <Text
+          style={[styles.transactionDate, { color: theme.colors.text + "60" }]}>
           {new Date(transaction.date).toLocaleDateString()}
         </Text>
       </View>
-      
+
       <View>
         <Text
           style={[
@@ -61,11 +48,10 @@ export const TransactionItem = ({ transaction }: TransactionItemProps) => {
             {
               color:
                 transaction.type === "income"
-                  ? theme.colors.primary
+                  ? theme.colors.tabActive
                   : theme.colors.notification,
             },
-          ]}
-        >
+          ]}>
           ₹{transaction.amount.toFixed(2)}
         </Text>
       </View>

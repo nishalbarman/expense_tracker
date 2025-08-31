@@ -17,6 +17,8 @@ import { getBottomContentPadding } from "./_layout";
 import { LinearGradient } from "expo-linear-gradient";
 import { TransactionItem } from "@/components/TransactionItem";
 import { useTheme } from "@react-navigation/native";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks";
+import { toggleTheme } from "@/redux/slices/themeSlice";
 
 // Custom Card Component
 const CustomCard = ({ children, style, onPress, ...props }: any) => {
@@ -41,7 +43,7 @@ const CustomButton = ({ children, onPress, compact = false, style }: any) => {
       style={[
         styles.button,
         compact && styles.compactButton,
-        { borderColor: theme.colors.primary },
+        { borderColor: theme.colors.text },
         style,
       ]}
       onPress={onPress}
@@ -50,7 +52,7 @@ const CustomButton = ({ children, onPress, compact = false, style }: any) => {
         style={[
           styles.buttonText,
           compact && styles.compactButtonText,
-          { color: theme.colors.primary },
+          { color: theme.colors.text },
         ]}>
         {children}
       </Text>
@@ -94,6 +96,12 @@ export default function HomeScreen(): JSX.Element {
   //     theme.colors.secondary || theme.colors.primary,
   //   ];
   // }, [theme.colors]);
+  const { themePref } = useAppSelector((state) => state.theme);
+  const dispatch = useAppDispatch();
+
+  const handleToggleTheme = () => {
+    dispatch(toggleTheme());
+  };
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>
@@ -115,9 +123,15 @@ export default function HomeScreen(): JSX.Element {
             <View>
               <Text style={styles.helloSmall}>Welcome</Text>
             </View>
-            <TouchableOpacity style={styles.badgeIcon} activeOpacity={0.7}>
-              {/* <Ionicons name="partly-sunny" size={18} color="#FFFFFF" /> */}
-              <Ionicons name="cloudy-night" size={18} color="#FFFFFF" />
+            <TouchableOpacity
+              onPress={handleToggleTheme}
+              style={styles.badgeIcon}
+              activeOpacity={0.7}>
+              {themePref === "dark" ? (
+                <Ionicons name="partly-sunny" size={18} color="#FFFFFF" />
+              ) : (
+                <Ionicons name="cloudy-night" size={18} color="#FFFFFF" />
+              )}
             </TouchableOpacity>
           </View>
 
@@ -143,7 +157,14 @@ export default function HomeScreen(): JSX.Element {
               </Text>
 
               <View style={styles.kpiRow}>
-                <View style={[styles.kpiChip, { backgroundColor: "#E9FDF2" }]}>
+                <View
+                  style={[
+                    styles.kpiChip,
+                    {
+                      backgroundColor:
+                        themePref === "dark" ? "#333333ff" : "#E9FDF2",
+                    },
+                  ]}>
                   <View
                     style={[
                       styles.kpiIconWrap,
@@ -159,7 +180,14 @@ export default function HomeScreen(): JSX.Element {
                   </View>
                 </View>
 
-                <View style={[styles.kpiChip, { backgroundColor: "#FDEBEC" }]}>
+                <View
+                  style={[
+                    styles.kpiChip,
+                    {
+                      backgroundColor:
+                        themePref === "dark" ? "#333333ff" : "#FDEBEC",
+                    },
+                  ]}>
                   <View
                     style={[
                       styles.kpiIconWrap,
@@ -182,7 +210,8 @@ export default function HomeScreen(): JSX.Element {
         {/* Quick tiles */}
         <View style={styles.quickGrid}>
           <QuickTile
-            color="#F1F5F9"
+            color={theme.colors.quickTile1}
+            textColor={theme.colors.quickTileText1}
             iconColor="#475569"
             icon="scan"
             title="Scan Bill"
@@ -190,21 +219,24 @@ export default function HomeScreen(): JSX.Element {
           />
 
           <QuickTile
-            color="#EEF2FF"
+            color={theme.colors.quickTile2}
+            textColor={theme.colors.quickTileText2}
             iconColor="#6366F1"
             icon="wallet-outline"
             title="Add"
             onPress={() => router.push("/add")}
           />
           <QuickTile
-            color="#FFF7ED"
+            color={theme.colors.quickTile3}
+            textColor={theme.colors.quickTileText3}
             iconColor="#F59E0B"
             icon="bar-chart-outline"
             title="Charts"
             onPress={() => router.push("/charts")}
           />
           <QuickTile
-            color="#E0F7FA"
+            color={theme.colors.quickTile4}
+            textColor={theme.colors.quickTileText4}
             iconColor="#06B6D4"
             icon="time-outline"
             title="History"
@@ -221,7 +253,9 @@ export default function HomeScreen(): JSX.Element {
 
         {/* Recent Transactions */}
         <View style={[styles.sectionHeader, { paddingHorizontal: 15 }]}>
-          <Text style={styles.sectionTitle}>Recent Transactions</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+            Recent Transactions
+          </Text>
           <CustomButton compact onPress={() => router.push("/history")}>
             View all
           </CustomButton>
@@ -230,7 +264,10 @@ export default function HomeScreen(): JSX.Element {
         <Animated.View
           style={{ paddingHorizontal: 15 }}
           entering={FadeInUp.delay(150).duration(600)}>
-          <CustomCard style={styles.cardList}>
+          <CustomCard
+            style={
+              themePref === "dark" ? styles.cardListDark : styles.cardListLight
+            }>
             <View style={[styles.cardContent]}>
               {recent.length > 0 ? (
                 recent.map((t, idx) => (
@@ -257,12 +294,14 @@ function QuickTile({
   iconColor,
   icon,
   title,
+  textColor,
   onPress,
 }: {
   color: string;
   iconColor: string;
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
+  textColor: string;
   onPress: () => void;
 }) {
   return (
@@ -277,7 +316,7 @@ function QuickTile({
           ]}>
           <Ionicons name={icon} size={20} color={iconColor} />
         </View>
-        <Text style={styles.tileText}>{title}</Text>
+        <Text style={[styles.tileText, { color: textColor }]}>{title}</Text>
       </View>
     </CustomCard>
   );
@@ -412,7 +451,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 16, fontWeight: "800", color: "#0F172A" },
 
-  cardList: { borderRadius: 16, backgroundColor: "#FFFFFF" },
+  cardListLight: { borderRadius: 16, backgroundColor: "#FFFFFF" },
+  cardListDark: { borderRadius: 16, backgroundColor: "#272727ff" },
   rowWrap: { paddingVertical: 2 },
   rowDivider: {
     height: 1,

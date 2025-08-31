@@ -1,12 +1,5 @@
 import React, { useEffect } from "react";
-import {
-  View,
-  StyleSheet,
-  Text,
-  Platform,
-  TouchableOpacity,
-  ActivityIndicator,
-} from "react-native";
+import { View, StyleSheet, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Transaction } from "../types";
 import { useTheme } from "@react-navigation/native";
@@ -33,7 +26,7 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ item }) => {
 
   const iconName = item.type === "income" ? "add-circle" : "remove-circle";
   const iconColor =
-    item.type === "income" ? theme.colors.primary : theme.colors.notification;
+    item.type === "income" ? theme.colors.tabActive : theme.colors.notification;
 
   const { deleteTransaction } = useTransactions();
 
@@ -51,44 +44,38 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ item }) => {
   });
 
   useEffect(() => {
-    // Create the slow-fast-slow spinning pattern
     rotation.value = withRepeat(
       withSequence(
-        // Slow start: 0 to 120 degrees over 1000ms with ease-out
         withTiming(120, {
           duration: 800,
           easing: Easing.linear,
         }),
-        // Fast middle: 120 to 240 degrees over 400ms with linear easing
         withTiming(360, {
           duration: 300,
           easing: Easing.linear,
         })
-        // // Slow end: 240 to 360 degrees over 1000ms with ease-in
-        // withTiming(360, {
-        //   duration: 1000,
-        //   easing: Easing.linear,
-        // })
       ),
-      -1, // Infinite repetitions
-      false // Don't reverse
+      -1,
+      false
     );
 
-    // Reset to 0 after each full rotation to prevent value accumulation
     return () => {
       rotation.value = 0;
     };
   }, []);
 
   return (
-    <View style={styles.container}>
-      <Animated.View
-        style={[
-          animatedStyle,
-          {
-            marginRight: 12,
-          },
-        ]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.colors.card,
+          borderBottomColor: theme.dark
+            ? "rgba(255,255,255,0.08)"
+            : "rgba(0,0,0,0.06)",
+        },
+      ]}>
+      <Animated.View style={[animatedStyle, { marginRight: 12 }]}>
         <Ionicons name={iconName} size={24} color={iconColor} />
       </Animated.View>
 
@@ -98,11 +85,19 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ item }) => {
         </Text>
         {!!item.notes && (
           <Text
-            style={[styles.description, { color: theme.colors.text + "80" }]}>
+            style={[
+              styles.description,
+              {
+                color:
+                  (theme.colors as any).onSurfaceVariant ??
+                  theme.colors.text + "80",
+              },
+            ]}>
             {item.notes}
           </Text>
         )}
       </View>
+
       <View style={styles.right}>
         <View style={styles.amountContainer}>
           <Text
@@ -111,30 +106,31 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ item }) => {
               {
                 color:
                   item.type === "income"
-                    ? theme.colors.primary
+                    ? theme.colors.tabActive
                     : theme.colors.notification,
               },
             ]}>
             ₹{item.amount.toFixed(2)}
           </Text>
-          <Text style={[styles.date, { color: theme.colors.text + "60" }]}>
+          <Text
+            style={[
+              styles.date,
+              {
+                color:
+                  (theme.colors as any).onSurfaceVariant ??
+                  theme.colors.text + "60",
+              },
+            ]}>
             {new Date(item.date).toLocaleDateString()}
           </Text>
         </View>
+
         <TouchableOpacity
           activeOpacity={0.7}
           style={{ marginLeft: 12 }}
           onPress={() => handleDeleteTransaction(item.id)}>
-          <Ionicons name="trash" size={20} color={theme.colors.primary} />
+          <Ionicons name="trash" size={20} color={theme.colors.tabActive} />
         </TouchableOpacity>
-
-        {/* <LottieView
-          style={{ width: 17, height: 19, marginLeft: 8 }}
-          source={require("../assets/animations/upload-cloud-light.json")}
-          autoPlay
-          loop
-        /> */}
-        {/* <Text style={styles.syncStatus}>{item.synced ? "✅" : "🔄"}</Text> */}
       </View>
     </View>
   );
@@ -145,8 +141,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 12,
-    // borderBlockColor: "#000000",
-    backgroundColor: "#FFFFFF",
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   icon: {
     marginRight: 12,

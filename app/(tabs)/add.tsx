@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   StyleSheet,
   ScrollView,
@@ -49,6 +49,7 @@ const SegmentedButtons = ({ value, onValueChange, buttons, style }: any) => {
               isLast && styles.segmentedButtonLast,
               isSelected && {
                 backgroundColor: theme.colors.primary,
+                borderColor: theme.colors.primary,
               },
               !isSelected && {
                 backgroundColor: theme.colors.card,
@@ -60,7 +61,11 @@ const SegmentedButtons = ({ value, onValueChange, buttons, style }: any) => {
               <Ionicons
                 name={button.icon}
                 size={16}
-                color={isSelected ? theme.colors.card : theme.colors.text}
+                color={
+                  isSelected
+                    ? (theme.colors as any).onPrimary ?? theme.colors.card
+                    : theme.colors.text
+                }
                 style={{ marginRight: 6 }}
               />
             )}
@@ -68,7 +73,9 @@ const SegmentedButtons = ({ value, onValueChange, buttons, style }: any) => {
               style={[
                 styles.segmentedButtonText,
                 {
-                  color: isSelected ? theme.colors.card : theme.colors.text,
+                  color: isSelected
+                    ? (theme.colors as any).onPrimary ?? theme.colors.card
+                    : theme.colors.text,
                 },
               ]}>
               {button.label}
@@ -175,15 +182,18 @@ const CustomButton = ({
       backgroundColor: disabled
         ? theme.colors.text + "40"
         : theme.colors.primary,
+      borderWidth: 0,
     },
     mode === "text" && {
       backgroundColor: "transparent",
+      borderWidth: 1,
+      borderColor: theme.colors.text + "40",
     },
     style,
   ];
 
-  const textColor =
-    mode === "contained" ? theme.colors.card : theme.colors.primary;
+  const containedText = (theme.colors as any).onPrimary ?? theme.colors.card;
+  const textColor = mode === "contained" ? containedText : theme.colors.primary;
 
   return (
     <TouchableOpacity
@@ -238,7 +248,10 @@ const CustomChip = ({ children, onPress, mode = "outlined" }: any) => {
         style={[
           styles.chipText,
           {
-            color: mode === "outlined" ? theme.colors.text : theme.colors.card,
+            color:
+              mode === "outlined"
+                ? theme.colors.text
+                : (theme.colors as any).onPrimary ?? theme.colors.card,
           },
         ]}>
         {children}
@@ -421,7 +434,15 @@ export default function AddTransactionScreen(): JSX.Element {
                 animationType="slide"
                 transparent
                 onRequestClose={() => setCategorySheetVisible(false)}>
-                <View style={styles.modalOverlay}>
+                <View
+                  style={[
+                    styles.modalOverlay,
+                    {
+                      backgroundColor: theme.dark
+                        ? "rgba(0,0,0,0.6)"
+                        : "rgba(0,0,0,0.5)",
+                    },
+                  ]}>
                   <View
                     style={[
                       styles.sheetContainer,
@@ -455,7 +476,9 @@ export default function AddTransactionScreen(): JSX.Element {
                               });
                               setCategorySheetVisible(false);
                             }}>
-                            {c}
+                            <Text style={{ color: theme.colors.text }}>
+                              {c}
+                            </Text>
                           </CustomChip>
                         ))}
                       </View>
@@ -480,7 +503,12 @@ export default function AddTransactionScreen(): JSX.Element {
                               justifyContent: "flex-start",
                               marginBottom: 4,
                             }}>
-                            {cat}
+                            <Text
+                              style={{
+                                color: theme.colors.text,
+                              }}>
+                              {cat}
+                            </Text>
                           </CustomButton>
                         );
                       })}
@@ -498,6 +526,9 @@ export default function AddTransactionScreen(): JSX.Element {
                     <View style={{ marginTop: 8 }}>
                       <CustomButton
                         mode="text"
+                        style={{
+                          color: theme.colors.tabActive,
+                        }}
                         onPress={() => setCategorySheetVisible(false)}>
                         Close
                       </CustomButton>
@@ -550,8 +581,17 @@ export default function AddTransactionScreen(): JSX.Element {
           }>
           {isSubmitting ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator color="white" size="small" />
-              <Text style={{ color: "white", marginLeft: 8 }}>Saving…</Text>
+              <ActivityIndicator
+                color={(theme.colors as any).onPrimary ?? "#FFFFFF"}
+                size="small"
+              />
+              <Text
+                style={{
+                  color: (theme.colors as any).onPrimary ?? "#FFFFFF",
+                  marginLeft: 8,
+                }}>
+                Saving…
+              </Text>
             </View>
           ) : (
             "Add Transaction"

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useRef } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import {
   View,
   StyleSheet,
@@ -19,6 +19,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@react-navigation/native";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks";
+import { toggleTheme } from "@/redux/slices/themeSlice";
 
 type FilterType = "all" | "income" | "expense";
 
@@ -68,14 +70,21 @@ const CustomCard = ({ children, style, ...props }: any) => {
   const theme = useTheme();
   return (
     <View
-      style={[styles.card, { backgroundColor: theme.colors.card }, style]}
+      style={[
+        styles.card,
+        {
+          backgroundColor: theme.colors.card,
+          // Elevation/shadow stays for both themes; background is themed
+        },
+        style,
+      ]}
       {...props}>
       {children}
     </View>
   );
 };
 
-// Custom Chip Component (if you want to use the commented out FlatList approach)
+// Custom Chip Component (used in commented alternative)
 const CustomChip = ({ children, selected, onPress, icon, style }: any) => {
   const theme = useTheme();
 
@@ -95,7 +104,11 @@ const CustomChip = ({ children, selected, onPress, icon, style }: any) => {
         <Ionicons
           name={icon}
           size={16}
-          color={selected ? theme.colors.card : theme.colors.text}
+          color={
+            selected
+              ? (theme.colors as any).onPrimary ?? theme.colors.card
+              : theme.colors.text
+          }
           style={{ marginRight: 6 }}
         />
       )}
@@ -103,7 +116,9 @@ const CustomChip = ({ children, selected, onPress, icon, style }: any) => {
         style={[
           styles.chipText,
           {
-            color: selected ? theme.colors.card : theme.colors.text,
+            color: selected
+              ? (theme.colors as any).onPrimary ?? theme.colors.card
+              : theme.colors.text,
             fontWeight: selected ? "700" : "600",
           },
         ]}>
@@ -148,15 +163,14 @@ export default function TransactionHistoryScreen(): JSX.Element {
         style={{
           borderRadius: 5,
           paddingHorizontal: 10,
-          backgroundColor: "#FFFFFF",
+          backgroundColor: theme.colors.card,
           marginHorizontal: 16,
-
           ...Platform.select({
             ios: {
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 8,
+              shadowOpacity: theme.dark ? 0.25 : 0.1,
+              shadowRadius: theme.dark ? 10 : 8,
             },
             android: {
               elevation: 2,
@@ -167,24 +181,30 @@ export default function TransactionHistoryScreen(): JSX.Element {
         <HistoryItem index={index} item={item} />
       </Animated.View>
     ),
-    []
+    [theme.colors.card, theme.dark]
   );
 
   const keyExtractor = useCallback((item: Transaction) => item.id, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    // If server sync exists, trigger it here; otherwise just debounce UX refresh.
     await new Promise((r) => setTimeout(r, 600));
     setRefreshing(false);
   }, []);
 
   const GRADIENT = useMemo(() => {
-    return [
-      theme.colors.primary,
-      theme.colors.secondary || theme.colors.primary,
-    ];
+    const start = theme.colors.primary;
+    const end = (theme.colors as any).secondary ?? theme.colors.primary;
+    return [start, end];
   }, [theme.colors]);
+
+  const dispatch = useAppDispatch();
+
+  const { themePref } = useAppSelector((state) => state.theme);
+
+  const handleToggleTheme = () => {
+    dispatch(toggleTheme());
+  };
 
   // Header that scrolls WITH the list
   const ListHeader = (
@@ -193,8 +213,25 @@ export default function TransactionHistoryScreen(): JSX.Element {
         colors={GRADIENT}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.hero, { paddingTop: 21 }]}>
+        style={[styles.hero, { paddingTop: insets.top + 12 }]}>
         <Animated.View>
+          <View style={[styles.heroHeader, { backgroundColor: "transparent" }]}>
+            <View>
+              <Text style={[styles.helloSmall, { color: "white" }]}>
+                History
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleToggleTheme}
+              style={styles.badgeIcon}
+              activeOpacity={0.7}>
+              {themePref === "dark" ? (
+                <Ionicons name="partly-sunny" size={18} color="#FFFFFF" />
+              ) : (
+                <Ionicons name="cloudy-night" size={18} color="#FFFFFF" />
+              )}
+            </TouchableOpacity>
+          </View>
           <CustomSearchBar
             placeholder="Search category or notes"
             value={searchQuery}
@@ -206,65 +243,49 @@ export default function TransactionHistoryScreen(): JSX.Element {
         </Animated.View>
       </LinearGradient>
 
-      <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
+      <View
+        style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12 }}>
         {/* Horizontal tabs */}
         <Animated.View>
-          <View style={[styles.chartTabs, { marginBottom: 5 }]}>
-            {(["all", "income", "expense"] as FilterType[]).map(
-              (type, index) => {
-                const isActive = selectedType === type;
-                return (
-                  <TouchableOpacity
-                    key={type}
+          <View
+            style={[
+              styles.chartTabs,
+              {
+                backgroundColor: theme.colors.card,
+                // keep elevation/shadow via styles
+              },
+            ]}>
+            {(["all", "income", "expense"] as FilterType[]).map((type) => {
+              const isActive = selectedType === type;
+              return (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.tab,
+                    isActive && {
+                      backgroundColor: theme.colors.primary,
+                    },
+                  ]}
+                  onPress={() => setSelectedType(type)}
+                  activeOpacity={0.7}>
+                  <Text
                     style={[
-                      styles.tab,
-                      isActive && {
-                        backgroundColor: theme.colors.primary,
+                      styles.tabText,
+                      {
+                        color: isActive
+                          ? (theme.colors as any).onPrimary ?? theme.colors.card
+                          : theme.colors.text,
                       },
-                    ]}
-                    onPress={() => setSelectedType(type)}
-                    activeOpacity={0.7}>
-                    <Text
-                      style={[
-                        styles.tabText,
-                        {
-                          color: isActive ? "white" : theme.colors.text,
-                        },
-                      ]}>
-                      {type.toUpperCase()}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              }
-            )}
+                    ]}>
+                    {type.toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </Animated.View>
 
-        {/* Alternative: Using Custom Chips (uncomment if preferred) */}
-        {/* <FlatList
-          data={[
-            { key: "all", label: "All", icon: "infinite" },
-            { key: "income", label: "Income", icon: "arrow-up" },
-            { key: "expense", label: "Expense", icon: "arrow-down" },
-          ]}
-          keyExtractor={(i) => i.key}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipsRow}
-          renderItem={({ item }) => {
-            const active = selectedType === (item.key as FilterType);
-            return (
-              <CustomChip
-                selected={active}
-                onPress={() => setSelectedType(item.key as FilterType)}
-                icon={item.icon}
-                style={styles.chipStyle}
-              >
-                {item.label}
-              </CustomChip>
-            );
-          }}
-        /> */}
+        {/* Alternative chips approach available below */}
       </View>
     </>
   );
@@ -275,7 +296,14 @@ export default function TransactionHistoryScreen(): JSX.Element {
         <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
           No transactions found
         </Text>
-        <Text style={[styles.emptyDescription, { color: theme.colors.text }]}>
+        <Text
+          style={[
+            styles.emptyDescription,
+            {
+              color:
+                (theme.colors as any).onSurfaceVariant ?? theme.colors.text,
+            },
+          ]}>
           Try changing the filter or clearing the search.
         </Text>
       </View>
@@ -303,12 +331,21 @@ export default function TransactionHistoryScreen(): JSX.Element {
         initialNumToRender={12}
         windowSize={10}
         removeClippedSubviews
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ItemSeparatorComponent={() => (
+          <View
+            style={{
+              height: 1,
+              backgroundColor: theme.dark
+                ? "rgba(255,255,255,0.08)"
+                : "rgba(0,0,0,0.06)",
+            }}
+          />
+        )}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[theme.colors.primary]}
+            colors={[theme.colors.tabActive]}
             progressBackgroundColor={theme.colors.card}
           />
         }
@@ -320,6 +357,15 @@ export default function TransactionHistoryScreen(): JSX.Element {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   flatList: { flex: 1 },
+
+  badgeIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   hero: {
     paddingHorizontal: 16,
@@ -333,7 +379,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 12,
   },
-  helloSmall: { color: "rgba(255,255,255,0.9)", fontSize: 13 },
+  helloSmall: { fontSize: 13 },
 
   listContent: { paddingBottom: 24 },
 
@@ -368,14 +414,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   searchBar: {
-    // Additional search bar specific styles if needed
     height: 50,
   },
 
   // Tab Styles
   chartTabs: {
     flexDirection: "row",
-    backgroundColor: "white",
     borderRadius: 16,
     padding: 4,
     ...Platform.select({
@@ -421,7 +465,7 @@ const styles = StyleSheet.create({
     }),
   },
 
-  // Chip Styles (for alternative implementation)
+  // Chips (for alternative implementation)
   chipsRow: {
     paddingTop: 13,
     paddingBottom: 8,
@@ -445,7 +489,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
-  // Empty State Styles
+  // Empty State
   emptyCard: {
     marginHorizontal: 16,
     marginTop: 12,
@@ -466,6 +510,6 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 
-  // Other Styles
+  // Other
   separator: { height: 1 },
 });

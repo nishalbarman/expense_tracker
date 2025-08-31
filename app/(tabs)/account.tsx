@@ -16,6 +16,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@react-navigation/native";
 import { BAR_HEIGHT, getBottomContentPadding } from "../_layout";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks";
+import { toggleTheme } from "@/redux/slices/themeSlice";
+import Animated from "react-native-reanimated";
 
 type Profile = {
   name: string;
@@ -63,7 +67,11 @@ const Card = ({ children, style, ...props }: any) => {
   const theme = useTheme();
   return (
     <View
-      style={[styles.card, { backgroundColor: theme.colors.card }, style]}
+      style={[
+        styles.card,
+        { backgroundColor: theme.colors.card, marginHorizontal: 16 },
+        style,
+      ]}
       {...props}>
       {children}
     </View>
@@ -313,17 +321,68 @@ export default function AccountScreen(): JSX.Element {
     ]);
   };
 
+  const { themePref } = useAppSelector((state) => state.theme);
+  const dispatch = useAppDispatch();
+
+  const handleToggleTheme = () => {
+    dispatch(toggleTheme());
+  };
+
   return (
     <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
-          padding: 16,
+          // padding: 16,
           paddingBottom: getBottomContentPadding(insets.bottom, 50),
           gap: 16,
         }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
+        <LinearGradient
+          colors={[theme.colors.primary, theme.colors.secondary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.hero, { paddingTop: insets.top + 12 }]}>
+          <Animated.View>
+            <View
+              style={[styles.heroHeader, { backgroundColor: "transparent" }]}>
+              <View>
+                <Text style={[styles.helloSmall]}>
+                  Account
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleToggleTheme}
+                style={styles.badgeIcon}
+                activeOpacity={0.7}>
+                {themePref === "dark" ? (
+                  <Ionicons name="partly-sunny" size={18} color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="cloudy-night" size={18} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
+            </View>
+            <View
+              style={{
+                flexDirection: "column",
+                alignItems: "center",
+              }}>
+              <Button
+                style={{
+                  marginLeft: 8,
+                  width: "40%",
+                  backgroundColor: theme.colors.primary,
+                }}
+                textColor={"#ffffff"}
+                onPress={onBackup}
+                compact>
+                Sync now
+              </Button>
+            </View>
+          </Animated.View>
+        </LinearGradient>
+
         {/* Data & Security */}
         <Card>
           <CardTitle title="Data & security" />
@@ -336,14 +395,6 @@ export default function AccountScreen(): JSX.Element {
               rightComponent={
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <Switch value={autoSync} onValueChange={setAutoSync} />
-                  <Button
-                    style={{
-                      marginLeft: 8,
-                    }}
-                    onPress={onBackup}
-                    compact>
-                    Sync now
-                  </Button>
                 </View>
               }
             />
@@ -395,7 +446,7 @@ export default function AccountScreen(): JSX.Element {
           contentStyle={{
             backgroundColor: theme.colors.primary,
           }}
-          textColor="white"
+          textColor={theme.colors.text}
           mode="contained-tonal"
           icon="exit"
           onPress={onSignOut}
@@ -409,6 +460,30 @@ export default function AccountScreen(): JSX.Element {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+
+  // Single scroll hero
+  hero: {
+    paddingHorizontal: 16,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
+  heroHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 15,
+  },
+  helloSmall: { color: "rgba(255,255,255,0.9)", fontSize: 13 },
+  helloName: { color: "#fff", fontSize: 20, fontWeight: "800", marginTop: 2 },
+  badgeIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   // Avatar styles
   avatar: {
