@@ -20,8 +20,8 @@
       },
       "package": "com.technoapps.expensetracker",
       "googleServicesFile": "./google/google-services.json",
-      "versionCode": 8,
-      "version": "1.0.8",
+      "versionCode": 16,
+      "version": "1.1.6",
       "edgeToEdgeEnabled": true
     },
     "web": {
@@ -33,7 +33,13 @@
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       "@react-native-firebase/app-check",
-      "react-native-google-mobile-ads",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-1862611364567749~3090755003",
+          "iosAppId": "ca-app-pub-1862611364567749~3090755003"
+        }
+      ],
       [
         "expo-sqlite",
         {
@@ -66,9 +72,9 @@
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 35,
-            "targetSdkVersion": 35,
-            "buildToolsVersion": "35.0.0",
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0",
             "enableProguardInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
             "minSdkVersion": 24

@@ -21,6 +21,9 @@ import {
 } from "@react-native-firebase/app-check";
 import { getApp } from "@react-native-firebase/app";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Provider } from "react-redux";
+import { PersistGate } from "redux-persist/integration/react";
+import { persistor, store } from "@/redux/store";
 
 const lightTheme = {
   ...DefaultTheme,
@@ -105,11 +108,12 @@ rnfbProvider.configure({
   },
 });
 
-export default function AppLayout() {
+function AppContainer() {
   const colorScheme = useColorScheme();
-  // const [themePreference, setThemePreference] = useState<string>(
-  //   !!colorScheme ? colorScheme : "light"
-  // );
+
+  const [themePreference, setThemePreference] = useState<string>(
+    !!colorScheme ? colorScheme : "light"
+  );
 
   // const theme = colorScheme === "dark" ? darkTheme : lightTheme;
   // const theme = colorScheme === "dark" ? lightTheme : darkTheme;
@@ -117,7 +121,7 @@ export default function AppLayout() {
   //   themePreference === "dark" ? darkTheme : lightTheme
   // );
 
-  const theme = lightTheme;
+  // const theme = lightTheme;
 
   RNStatusBar.setBarStyle("light-content");
   if (Platform.OS === "android") {
@@ -161,15 +165,63 @@ export default function AppLayout() {
   // }, [themePreference]);
 
   return (
-    <ThemeProvider value={theme}>
-      <TransactionProvider>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-        <StatusBar style="auto" />
-        <Toast />
-      </TransactionProvider>
-    </ThemeProvider>
+    <Provider store={store}>
+      <PersistGate loading={null} persistor={persistor}>
+        <ThemeProvider value={theme}>
+          <TransactionProvider>
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+            <StatusBar style="auto" />
+            <Toast />
+          </TransactionProvider>
+        </ThemeProvider>
+      </PersistGate>
+    </Provider>
+  );
+}
+
+// function AppContainer() {
+//   const mode = useAppSelector((state) => state.theme.mode); // Redux: "light" | "dark"
+//   const theme = mode === "dark" ? darkTheme : lightTheme;
+
+//   // StatusBar styling
+//   RNStatusBar.setBarStyle(mode === "dark" ? "light-content" : "dark-content");
+//   if (Platform.OS === "android") {
+//     RNStatusBar.setBackgroundColor(theme.colors.primary);
+//     RNStatusBar.setTranslucent(false);
+//   }
+
+//   return (
+//     <ThemeProvider value={theme}>
+//       <TransactionProvider>
+//         <Stack>
+//           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+//           <Stack.Screen name="+not-found" />
+//         </Stack>
+//         <StatusBar style="auto" />
+//         <Toast />
+//       </TransactionProvider>
+//     </ThemeProvider>
+//   );
+// }
+
+export default function AppLayout() {
+  useEffect(() => {
+    (async () => {
+      await initializeAppCheck(getApp(), {
+        provider: rnfbProvider,
+        isTokenAutoRefreshEnabled: true,
+      });
+    })();
+  }, []);
+
+  return (
+    <Provider store={store}>
+      <PersistGate loading={null} persistor={persistor}>
+        <AppContainer />
+      </PersistGate>
+    </Provider>
   );
 }

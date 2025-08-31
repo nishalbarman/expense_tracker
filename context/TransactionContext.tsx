@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+// import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import firestore from "@react-native-firebase/firestore";
 import React, {
@@ -13,6 +13,7 @@ import Toast from "react-native-toast-message";
 import { v4 as uuidv4 } from "uuid";
 // import { sampleTransactions } from "../data/transactionCategories";
 import type { Transaction, TransactionContextType } from "../types";
+import { mmkvStorage } from "@/mmkv/mmkvStorage";
 
 const TransactionContext = createContext<TransactionContextType | undefined>(
   undefined
@@ -42,18 +43,19 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
 
   useEffect(() => {
-    AsyncStorage.getItem("autoSync").then((val) => {
+    mmkvStorage.getItem("autoSync").then((val) => {
       if (val !== null) setAutoSync(val === "true");
     });
   }, []);
 
   useEffect(() => {
-    AsyncStorage.setItem("autoSync", String(autoSync));
+    mmkvStorage.setItem("autoSync", String(autoSync));
   }, [autoSync]);
 
   // Load pending delete queue on mount
   useEffect(() => {
-    AsyncStorage.getItem("pendingDeletes")
+    mmkvStorage
+      .getItem("pendingDeletes")
       .then((val) => {
         if (val) setPendingDeleteIds(JSON.parse(val));
       })
@@ -84,19 +86,19 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
   }, [autoSync, loading]);
 
   const saveTransactions = async (arr: Transaction[]) => {
-    await AsyncStorage.setItem("transactions", JSON.stringify(arr));
+    await mmkvStorage.setItem("transactions", JSON.stringify(arr));
   };
 
   const savePendingDeletes = async (ids: string[]) => {
-    await AsyncStorage.setItem("pendingDeletes", JSON.stringify(ids));
+    await mmkvStorage.setItem("pendingDeletes", JSON.stringify(ids));
   };
 
   /**
-   * Load transactions from AsyncStorage or initialize with sample data
+   * Load transactions from mmkvStorage or initialize with sample data
    */
   const loadTransactions = async (): Promise<void> => {
     try {
-      const storedTransactions = await AsyncStorage.getItem("transactions");
+      const storedTransactions = await mmkvStorage.getItem("transactions");
 
       if (storedTransactions) {
         setTransactions(() => JSON.parse(storedTransactions));
@@ -109,7 +111,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
         //   synced: false, // Ensure sample transactions are marked as unsynced
         // }));
         // setTransactions(initializedTransactions);
-        // await AsyncStorage.setItem(
+        // await mmkvStorage.setItem(
         //   "transactions",
         //   JSON.stringify(initializedTransactions)
         // );
@@ -283,7 +285,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
    */
   const getLastSyncTime = async (): Promise<string> => {
     try {
-      const lastSync = await AsyncStorage.getItem("lastSyncTime");
+      const lastSync = await mmkvStorage.getItem("lastSyncTime");
       return lastSync || new Date(0).toISOString();
     } catch (error) {
       console.error("Error getting last sync time:", error);
@@ -296,7 +298,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
    */
   const updateLastSyncTime = async (timestamp: string): Promise<void> => {
     try {
-      await AsyncStorage.setItem("lastSyncTime", timestamp);
+      await mmkvStorage.setItem("lastSyncTime", timestamp);
     } catch (error) {
       console.error("Error updating last sync time:", error);
     }
@@ -421,7 +423,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
           tx.id === id ? { ...tx, synced: true } : tx
         );
         saveTransactions(updatedTransactions).catch((error) => {
-          console.error("Error saving to AsyncStorage:", error);
+          console.error("Error saving to mmkvStorage:", error);
         });
         return updatedTransactions;
       });
