@@ -40,3 +40,6 @@ app-example
 android.keystore
 credentials.json
 google-services.json
+*.aab
+*.apk
+/build
