@@ -54,6 +54,8 @@ const { width: screenWidth } = Dimensions.get("window");
 // }
 
 interface RecognizedText {
+  status: boolean;
+  error: string;
   amount: string;
   category: string;
   note: string;
@@ -176,7 +178,7 @@ export default function ScanImageScreen(): JSX.Element {
     });
   }, []);
 
-  const extractTransactionDetails = useCallback(async (text) => {
+  const extractTransactionDetails = useCallback(async (text: string) => {
     const app = getApp();
     // Can also pass an instance of auth which will pass in an auth token if a user is signed-in
     const authInstance = auth(app);
@@ -192,6 +194,8 @@ export default function ScanImageScreen(): JSX.Element {
 
     const jsonSchema = Schema.object({
       properties: {
+        status: Schema.boolean(),
+        error: Schema.string(),
         amount: Schema.string(),
         category: Schema.string(),
         note: Schema.string(),
@@ -210,18 +214,35 @@ export default function ScanImageScreen(): JSX.Element {
       - note: Any additional description or details from the text.
       - type: Either "expense" or "income" (determine based on the context).
 
-      If any field is missing, leave it as an empty string.  
+      If any field is missing, leave it as an empty string.
 
-      Example Input:  
-      "Bought groceries for 500 rupees at Reliance Fresh"  
+      If the given text is not describing a transaction, then return JSON format filling the error fields.
 
-      Example Output:  
-      {
-        "amount": "500",
-        "category": "Groceries",
-        "note": "Bought groceries at Reliance Fresh",
-        "type": "expense"
-      }
+      Success Example Input:  
+        "Bought groceries for 500 rupees at Reliance Fresh"  
+
+        Example Output:  
+        {
+          "status": true,
+          "error": "",
+          "amount": "500",
+          "category": "Groceries",
+          "note": "Bought groceries at Reliance Fresh",
+          "type": "expense"
+        }
+
+      Failed Example Input:
+        "I am a react native developer working in an android application.
+
+        {
+          "status": false,
+          "error": "No Transaction Information Found.",
+          "amount": "",
+          "category": "",
+          "note": "",
+          "type": ""
+        }
+
       `;
 
     const model = getGenerativeModel(ai, {
@@ -346,7 +367,8 @@ export default function ScanImageScreen(): JSX.Element {
   const theme = useTheme();
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
       {/* <LinearGradient
         colors={[theme.colors.primary, theme.colors.secondary]}
@@ -460,16 +482,19 @@ export default function ScanImageScreen(): JSX.Element {
               )}
             </View>
 
-            {recognizedText ? (
+            {recognizedText?.status ? (
               <TextResultCard recognizedText={recognizedText} />
             ) : (
               <View style={styles.noTextContainer}>
                 <Ionicons name="document-text-outline" size={48} color="#CCC" />
                 <Text style={styles.noTextMessage}>
-                  No text found in the image
+                  No transaction found in the image
+                </Text>
+                <Text style={styles.noTextMessage}>
+                  Error: {recognizedText.error}
                 </Text>
                 <Text style={styles.noTextSubtitle}>
-                  Try with an image that contains clear text
+                  Try with an image that contains transaction details
                 </Text>
               </View>
             )}

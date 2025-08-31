@@ -92,7 +92,7 @@ rnfbProvider.configure({
   android: {
     provider: __DEV__ ? "debug" : "playIntegrity",
     debugToken: "",
-    // debugToken: "",
+    // debugToken: "59E0AC3B-C562-45E0-86F9-743B3FA14C3E",
   },
   apple: {
     provider: __DEV__ ? "debug" : "appAttestWithDeviceCheckFallback",

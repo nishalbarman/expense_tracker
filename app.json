@@ -33,6 +33,7 @@
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       "@react-native-firebase/app-check",
+      "react-native-google-mobile-ads",
       [
         "expo-sqlite",
         {
@@ -60,7 +61,24 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "minSdkVersion": 24
+          },
+          "ios": {
+            "useFrameworks": "static",
+            "ccacheEnabled": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
