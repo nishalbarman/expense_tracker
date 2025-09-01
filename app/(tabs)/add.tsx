@@ -13,7 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useTransactions } from "../../context/TransactionContext";
 import Animated, { FadeInUp } from "react-native-reanimated";
-import { router, useLocalSearchParams, usePathname } from "expo-router";
+import { router, usePathname } from "expo-router";
 import { transactionCategories } from "../../data/transactionCategories";
 import { useForm, Controller } from "react-hook-form";
 import { useTheme } from "@react-navigation/native";
@@ -28,16 +28,6 @@ type FormValues = {
   amount: string;
   category: string;
   notes: string;
-};
-
-type Transaction = {
-  id: string;
-  type: "expense" | "income";
-  amount: number;
-  category: string;
-  notes?: string;
-  date: string; // ISO
-  synced?: boolean;
 };
 
 const CURRENCY = "₹";
@@ -192,7 +182,7 @@ const CustomButton = ({
   ...props
 }: any) => {
   const theme = useTheme();
-  const { themePref } = useAppSelector((state) => state.theme);
+  const {themePref} = useAppSelector(state=>state.theme)
 
   const buttonStyle = [
     styles.button,
@@ -331,13 +321,7 @@ const CustomSelectInput = ({
 
 export default function AddTransactionScreen(): JSX.Element {
   const pathname = usePathname();
-  const params = useLocalSearchParams<{
-    mode?: "add" | "edit";
-    t?: string; // serialized transaction JSON
-  }>();
-  const isEdit = params?.mode === "edit" && typeof params.t === "string";
-
-  const { addTransaction, updateTransaction } = useTransactions();
+  const { addTransaction } = useTransactions();
   const theme = useTheme();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -355,28 +339,13 @@ export default function AddTransactionScreen(): JSX.Element {
     defaultValues: { amount: "", category: "", notes: "", type: "expense" },
   });
 
-  // Pre-fill form on edit
-  useEffect(() => {
-    if (isEdit) {
-      try {
-        const tx: Transaction = JSON.parse(params.t as string);
-        reset({
-          amount: String(tx.amount ?? ""),
-          category: tx.category ?? "",
-          notes: tx.notes ?? "",
-          type: tx.type ?? "expense",
-        });
-      } catch {
-        // invalid payload; ignore
-      }
-    } else if (pathname === "/add") {
-      reset();
-    }
-  }, [isEdit, params.t, pathname, reset]); // react-hook-form prefill pattern
-
   const typeValue = watch("type");
   const amountValue = watch("amount");
   const categoryValue = watch("category");
+
+  useEffect(() => {
+    if (pathname === "/add") reset();
+  }, [pathname, reset]);
 
   const filteredCategories = useMemo(() => {
     if (!categoryQuery.trim()) return transactionCategories[typeValue];
@@ -397,8 +366,8 @@ export default function AddTransactionScreen(): JSX.Element {
     const parts = cleaned.split(".");
     const normalized =
       parts.length > 1
-        ? `${parts.replace(/^0+(?=\d)/, "") || "0"}.${parts[5].slice(0, 2)}`
-        : (parts || "").replace(/^0+(?=\d)/, "");
+        ? `${parts[0].replace(/^0+(?=\d)/, "") || "0"}.${parts[1].slice(0, 2)}`
+        : (parts[0] || "").replace(/^0+(?=\d)/, "");
     return normalized;
   };
 
@@ -416,54 +385,23 @@ export default function AddTransactionScreen(): JSX.Element {
         setIsSubmitting(false);
         return;
       }
-
-      if (isEdit) {
-        // parse incoming original transaction to preserve id and date
-        let base: Transaction | null = null;
-        try {
-          base = JSON.parse(String(params.t));
-        } catch {
-          base = null;
-        }
-        if (!base) {
-          Toast.show({ type: "error", text1: "Invalid edit payload" });
-          setIsSubmitting(false);
-          return;
-        }
-        const next: Transaction = {
-          ...base,
-          type: data.type,
-          category: data.category,
-          amount: amt,
-          notes: data.notes?.trim() || "",
-          // keep original date unless needed; or update to now if desired
-          date: base.date,
-          synced: false,
-        };
-        await updateTransaction?.(next);
-        Toast.show({ type: "success", text1: "Transaction updated" });
-      } else {
-        const newTransaction: Omit<Transaction, "id"> & { id: string } = {
-          id:
-            (global as any).crypto?.randomUUID?.() ??
-            `${Date.now()}-${Math.round(Math.random() * 1e6)}`,
-          amount: amt,
-          category: data.category,
-          type: data.type,
-          date: new Date().toISOString(),
-          notes: data.notes?.trim() || "",
-          synced: false,
-        };
-        await addTransaction?.(newTransaction);
-        Toast.show({ type: "success", text1: "Transaction added" });
-        reset();
-        Keyboard.dismiss();
-      }
+      const newTransaction = {
+        amount: amt,
+        category: data.category,
+        type: data.type,
+        date: new Date().toISOString(),
+        notes: data.notes?.trim() || "",
+        synced: false,
+      };
+      await addTransaction(newTransaction);
+      Toast.show({ type: "success", text1: "Transaction added" });
+      reset();
+      Keyboard.dismiss();
       router.replace("/");
     } catch (e) {
       Toast.show({
         type: "error",
-        text1: isEdit ? "Failed to update" : "Failed to add",
+        text1: "Failed to add",
         text2: "Please try again.",
       });
     } finally {
@@ -473,8 +411,15 @@ export default function AddTransactionScreen(): JSX.Element {
 
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ["80%", "100%"], []);
-  const openCategorySheet = () => bottomSheetRef.current?.snapToIndex(0);
-  const closeCategorySheet = () => bottomSheetRef.current?.close();
+
+  const openCategorySheet = () => {
+    bottomSheetRef.current?.snapToIndex(0);
+  };
+
+  const closeCategorySheet = () => {
+    bottomSheetRef.current?.close();
+  };
+
   const insets = useSafeAreaInsets();
 
   return (
@@ -587,9 +532,10 @@ export default function AddTransactionScreen(): JSX.Element {
             style={styles.submitButton}
             disabled={
               !isValid ||
+              !isDirty ||
               isSubmitting ||
-              !watch("amount") ||
-              !watch("category")
+              !amountValue ||
+              !categoryValue
             }
             icon={
               isSubmitting
@@ -598,41 +544,23 @@ export default function AddTransactionScreen(): JSX.Element {
                 ? "arrow-down"
                 : "arrow-up"
             }>
-            {isEdit
-              ? isSubmitting
-                ? (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator
-                      color={(theme.colors as any).onPrimary ?? "#FFFFFF"}
-                      size="small"
-                    />
-                    <Text
-                      style={{
-                        color: (theme.colors as any).onPrimary ?? "#FFFFFF",
-                        marginLeft: 8,
-                      }}>
-                      Saving…
-                    </Text>
-                  </View>
-                )
-                : "Save Changes"
-              : isSubmitting
-              ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator
-                    color={(theme.colors as any).onPrimary ?? "#FFFFFF"}
-                    size="small"
-                  />
-                  <Text
-                    style={{
-                      color: (theme.colors as any).onPrimary ?? "#FFFFFF",
-                      marginLeft: 8,
-                    }}>
-                    Saving…
-                  </Text>
-                </View>
-              )
-              : "Add Transaction"}
+            {isSubmitting ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator
+                  color={(theme.colors as any).onPrimary ?? "#FFFFFF"}
+                  size="small"
+                />
+                <Text
+                  style={{
+                    color: (theme.colors as any).onPrimary ?? "#FFFFFF",
+                    marginLeft: 8,
+                  }}>
+                  Saving…
+                </Text>
+              </View>
+            ) : (
+              "Add Transaction"
+            )}
           </CustomButton>
         </Animated.View>
       </ScrollView>
@@ -646,7 +574,7 @@ export default function AddTransactionScreen(): JSX.Element {
         backgroundStyle={{ backgroundColor: theme.colors.card }}>
         <View style={{ padding: 16 }}>
           <Text style={[styles.sheetTitle, { color: theme.colors.text }]}>
-            Choose {typeValue.toUpperCase()}
+            Choose {typeValue[0].toUpperCase()}
             {typeValue.substring(1)} Category
           </Text>
 
@@ -736,13 +664,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
   },
-  // primary error text for fields
-  errorText: {
-    color: "#ef4444",
-    fontSize: 12,
-    marginTop: -10,
-    marginBottom: 8,
-  },
+  // errorText: {
+  //   marginTop: 4,
+  //   fontSize: 12,
+  // },
 
   // Segmented Buttons
   segmentedContainer: {
@@ -865,6 +790,14 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
+  // Other styles
+  errorText: {
+    color: "#ef4444",
+    fontSize: 12,
+    marginTop: 12,
+    // marginTop: -10,
+    marginBottom: 8,
+  },
   noResultsText: {
     opacity: 0.6,
     textAlign: "center",

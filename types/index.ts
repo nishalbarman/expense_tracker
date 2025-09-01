@@ -14,6 +14,7 @@ export interface TransactionContextType {
     transaction: Omit<Transaction, "id" | "synced">
   ) => Promise<void>;
   syncAllTransactions: () => Promise<void>;
+  updateTransaction?: (next: Transaction) => Promise<void>;
   deleteTransaction?: (id: string) => Promise<void>; // Add this line
   isSyncing?: boolean;
   autoSync?: boolean;
