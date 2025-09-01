@@ -21,7 +21,7 @@
       "package": "com.technoapps.expensetracker",
       "googleServicesFile": "./google/google-services.json",
       "versionCode": 16,
-      "version": "1.2.2",
+      "version": "1.2.3",
       "edgeToEdgeEnabled": true
     },
     "web": {
