@@ -573,6 +573,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
         transactions,
         addTransaction,
         deleteTransaction,
+        syncAllTransactions,
         isSyncing,
         autoSync,
         setAutoSync: (value: boolean) => setAutoSync(value),

@@ -163,8 +163,7 @@ export default function HomeScreen(): JSX.Element {
                   style={[
                     styles.kpiChip,
                     {
-                      backgroundColor:
-                        themePref === "dark" ? "#333333ff" : "#E9FDF2",
+                      backgroundColor: theme.colors.incomeCard,
                     },
                   ]}>
                   <View
@@ -186,8 +185,7 @@ export default function HomeScreen(): JSX.Element {
                   style={[
                     styles.kpiChip,
                     {
-                      backgroundColor:
-                        themePref === "dark" ? "#333333ff" : "#FDEBEC",
+                      backgroundColor: theme.colors.expenseCard,
                     },
                   ]}>
                   <View

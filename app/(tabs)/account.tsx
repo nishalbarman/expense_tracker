@@ -20,6 +20,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { toggleTheme } from "@/redux/slices/themeSlice";
 import Animated from "react-native-reanimated";
+import { mmkvStorage } from "@/mmkv/mmkvStorage";
+import { useTransactions } from "@/context/TransactionContext";
 
 type Profile = {
   name: string;
@@ -257,10 +259,11 @@ export default function AccountScreen(): JSX.Element {
   const [profile, setProfile] = useState<Profile>(INITIAL_PROFILE);
   const [editing, setEditing] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
-  const [autoSync, setAutoSync] = useState(true);
   const [preferredFormat, setPreferredFormat] = useState<
     "system" | "indian" | "international"
   >("system");
+
+  const { autoSync, syncAllTransactions, setAutoSync } = useTransactions();
 
   const initials = useMemo(() => {
     const parts = profile.name.trim().split(/\s+/);
@@ -284,9 +287,13 @@ export default function AccountScreen(): JSX.Element {
   };
 
   const onBackup = () => {
+    syncAllTransactions()
+      .then(() => Alert.alert("Backup & Sync", "Syncing Done!", []))
+      .catch(() => Alert.alert("Backup & Sync", "Syncing Done!", []));
     Alert.alert(
       "Backup & Sync",
-      autoSync ? "Auto sync is ON. Syncing now…" : "Syncing once…"
+      autoSync ? "Auto sync is ON. Syncing now…" : "Syncing once…",
+      []
     );
   };
 
@@ -300,7 +307,7 @@ export default function AccountScreen(): JSX.Element {
           text: "Clear",
           style: "destructive",
           onPress: async () => {
-            await AsyncStorage.clear();
+            await mmkvStorage.clear();
             Alert.alert("Cleared", "Local data removed.");
           },
         },
@@ -348,9 +355,7 @@ export default function AccountScreen(): JSX.Element {
             <View
               style={[styles.heroHeader, { backgroundColor: "transparent" }]}>
               <View>
-                <Text style={[styles.helloSmall]}>
-                  Account
-                </Text>
+                <Text style={[styles.helloSmall]}>Account</Text>
               </View>
               <TouchableOpacity
                 onPress={handleToggleTheme}

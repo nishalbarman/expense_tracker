@@ -26,6 +26,7 @@ import { PersistGate } from "redux-persist/integration/react";
 import { persistor, store } from "@/redux/store";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { setTheme } from "@/redux/slices/themeSlice";
+import { getAuth, signInAnonymously } from "@react-native-firebase/auth";
 
 const lightTheme = {
   ...DefaultTheme,
@@ -48,6 +49,9 @@ const lightTheme = {
     quickTileText4: "#111827",
 
     tabActive: "#429690",
+
+    incomeCard: "#E9FDF2",
+    expenseCard: "#FDEBEC",
 
     card: "#FFFFFF",
     text: "#2F3542",
@@ -93,6 +97,9 @@ const darkTheme = {
 
     tabActive: "#429690", // Highlight stays teal
 
+    incomeCard: "#333333ff",
+    expenseCard: "#333333ff",
+
     card: "#1E1E1E", // Dark card background
     text: "#E5E7EB", // Light gray text
     textBalance: "#D1D5DB", // Slightly lighter gray
@@ -126,8 +133,8 @@ const rnfbProvider = new ReactNativeFirebaseAppCheckProvider();
 rnfbProvider.configure({
   android: {
     provider: __DEV__ ? "debug" : "playIntegrity",
-    debugToken: "",
-    // debugToken: "59E0AC3B-C562-45E0-86F9-743B3FA14C3E",
+    // debugToken: "",
+    debugToken: "59E0AC3B-C562-45E0-86F9-743B3FA14C3E",
   },
   apple: {
     provider: __DEV__ ? "debug" : "appAttestWithDeviceCheckFallback",
@@ -208,6 +215,18 @@ function AppContainer() {
   // useEffect(() => {
   //   setTheme(themePreference === "dark" ? darkTheme : lightTheme);
   // }, [themePreference]);
+
+  signInAnonymously(getAuth())
+    .then(() => {
+      console.log("User signed in anonymously");
+    })
+    .catch((error) => {
+      if (error.code === "auth/operation-not-allowed") {
+        console.log("Enable anonymous in your firebase console.");
+      }
+
+      console.error(error);
+    });
 
   return (
     <ThemeProvider value={theme}>

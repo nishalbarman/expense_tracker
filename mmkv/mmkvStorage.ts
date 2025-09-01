@@ -18,4 +18,7 @@ export const mmkvStorage = {
   removeItem: async (key: string) => {
     storage.delete(key);
   },
+  clear: async () => {
+    storage.clearAll();
+  },
 };

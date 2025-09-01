@@ -1,10 +1,7 @@
+// components/HistoryItem.tsx
 import React, { useEffect } from "react";
 import { View, StyleSheet, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Transaction } from "../types";
-import { useTheme } from "@react-navigation/native";
-// import LottieView from "lottie-react-native";
-
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -13,8 +10,10 @@ import Animated, {
   withRepeat,
   Easing,
 } from "react-native-reanimated";
-
+import { useTheme, useNavigation } from "@react-navigation/native";
+import { Transaction } from "../types";
 import { useTransactions } from "@/context/TransactionContext";
+import { router } from "expo-router";
 
 interface HistoryItemProps {
   item: Transaction;
@@ -26,7 +25,9 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ item }) => {
 
   const iconName = item.type === "income" ? "add-circle" : "remove-circle";
   const iconColor =
-    item.type === "income" ? theme.colors.tabActive : theme.colors.notification;
+    item.type === "income"
+      ? (theme.colors as any).tabActive
+      : theme.colors.notification;
 
   const { deleteTransaction } = useTransactions();
 
@@ -34,31 +35,23 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ item }) => {
     if (deleteTransaction) deleteTransaction(id);
   };
 
+  // subtle rotation animation when not synced
   const rotation = useSharedValue(0);
-
   const animatedStyle = useAnimatedStyle(() => {
     return {
       transform: [{ rotate: `${rotation.value}deg` }],
-      transformOrigin: "center",
     };
   });
 
   useEffect(() => {
     rotation.value = withRepeat(
       withSequence(
-        withTiming(120, {
-          duration: 800,
-          easing: Easing.linear,
-        }),
-        withTiming(360, {
-          duration: 300,
-          easing: Easing.linear,
-        })
+        withTiming(120, { duration: 800, easing: Easing.linear }),
+        withTiming(360, { duration: 300, easing: Easing.linear })
       ),
       -1,
       false
     );
-
     return () => {
       rotation.value = 0;
     };
@@ -70,13 +63,14 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ item }) => {
         styles.container,
         {
           backgroundColor: theme.colors.card,
-          borderBottomColor: theme.dark
+          borderBottomColor: (theme as any).dark
             ? "rgba(255,255,255,0.08)"
             : "rgba(0,0,0,0.06)",
         },
       ]}>
-      <Animated.View style={[animatedStyle, { marginRight: 12 }]}>
-        <Ionicons name={iconName} size={24} color={iconColor} />
+      <Animated.View
+        style={[!item.synced && animatedStyle, { marginRight: 12 }]}>
+        <Ionicons name={iconName as any} size={24} color={iconColor} />
       </Animated.View>
 
       <View style={styles.content}>
@@ -106,7 +100,7 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ item }) => {
               {
                 color:
                   item.type === "income"
-                    ? theme.colors.tabActive
+                    ? (theme.colors as any).tabActive
                     : theme.colors.notification,
               },
             ]}>
@@ -125,11 +119,30 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ item }) => {
           </Text>
         </View>
 
+        {/* Edit */}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          style={{ marginLeft: 12 }}
+          onPress={() =>
+            router.navigate(`/add?mode=edit&t=${JSON.stringify(item)}`)
+          }>
+          <Ionicons
+            name="create-outline"
+            size={21}
+            color={(theme.colors as any).tabActive}
+          />
+        </TouchableOpacity>
+
+        {/* Delete */}
         <TouchableOpacity
           activeOpacity={0.7}
           style={{ marginLeft: 12 }}
           onPress={() => handleDeleteTransaction(item.id)}>
-          <Ionicons name="trash" size={20} color={theme.colors.tabActive} />
+          <Ionicons
+            name="trash"
+            size={20}
+            color={(theme.colors as any).tabActive}
+          />
         </TouchableOpacity>
       </View>
     </View>
@@ -143,37 +156,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  icon: {
-    marginRight: 12,
-  },
-  content: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  description: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  right: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  amountContainer: {
-    alignItems: "flex-end",
-  },
-  amount: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  date: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  syncStatus: {
-    fontSize: 18,
-    marginLeft: 8,
-  },
+  icon: { marginRight: 12 },
+  content: { flex: 1 },
+  title: { fontSize: 16, fontWeight: "600" },
+  description: { fontSize: 12, marginTop: 2 },
+  right: { flexDirection: "row", alignItems: "center" },
+  amountContainer: { alignItems: "flex-end" },
+  amount: { fontSize: 16, fontWeight: "700" },
+  date: { fontSize: 12, marginTop: 2 },
+  syncStatus: { fontSize: 18, marginLeft: 8 },
 });
