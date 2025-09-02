@@ -471,16 +471,23 @@ export default function AccountScreen(): JSX.Element {
               <View>
                 <Text style={[styles.helloSmall]}>Account</Text>
               </View>
-              <TouchableOpacity
-                onPress={onSignOut}
-                style={styles.badgeIcon}
-                activeOpacity={0.7}>
-                {!!fbUser ? (
+              {!!fbUser ? (
+                <TouchableOpacity
+                  onPress={onSignOut}
+                  style={styles.badgeIcon}
+                  activeOpacity={0.7}>
                   <Ionicons name="log-out-outline" size={18} color="#FFFFFF" />
-                ) : (
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => {
+                    router.push("/login");
+                  }}
+                  style={styles.badgeIcon}
+                  activeOpacity={0.7}>
                   <Ionicons name="log-in-outline" size={18} color="#FFFFFF" />
-                )}
-              </TouchableOpacity>
+                </TouchableOpacity>
+              )}
             </View>
             <View
               style={{

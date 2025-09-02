@@ -233,7 +233,7 @@ function AppContainer() {
 
   useEffect(() => {
     configureGoogleSignin(
-      "29536141601-0eqkt3d88ngoreihr1bgds2dbeaos9uu.apps.googleusercontent.com"
+      "429536141601-0eqkt3d88ngoreihr1bgds2dbeaos9uu.apps.googleusercontent.com"
     );
   }, []);
 

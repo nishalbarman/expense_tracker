@@ -49,7 +49,7 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ item }) => {
         withTiming(120, { duration: 800, easing: Easing.linear }),
         withTiming(360, { duration: 300, easing: Easing.linear })
       ),
-      -1,
+      !item.synced ? -1 : 1,
       false
     );
     return () => {
