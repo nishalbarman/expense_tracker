@@ -26,7 +26,8 @@ import { PersistGate } from "redux-persist/integration/react";
 import { persistor, store } from "@/redux/store";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { setTheme } from "@/redux/slices/themeSlice";
-import { getAuth, signInAnonymously } from "@react-native-firebase/auth";
+import { configureGoogleSignin } from "@/utils/auth/google";
+// import { getAuth, signInAnonymously } from "@react-native-firebase/auth";
 
 const lightTheme = {
   ...DefaultTheme,
@@ -216,17 +217,25 @@ function AppContainer() {
   //   setTheme(themePreference === "dark" ? darkTheme : lightTheme);
   // }, [themePreference]);
 
-  signInAnonymously(getAuth())
-    .then(() => {
-      console.log("User signed in anonymously");
-    })
-    .catch((error) => {
-      if (error.code === "auth/operation-not-allowed") {
-        console.log("Enable anonymous in your firebase console.");
-      }
+  // useEffect(() => {
+  //   signInAnonymously(getAuth())
+  //     .then(() => {
+  //       console.log("User signed in anonymously");
+  //     })
+  //     .catch((error) => {
+  //       if (error.code === "auth/operation-not-allowed") {
+  //         console.log("Enable anonymous in your firebase console.");
+  //       }
 
-      console.error(error);
-    });
+  //       console.error(error);
+  //     });
+  // }, []);
+
+  useEffect(() => {
+    configureGoogleSignin(
+      "29536141601-0eqkt3d88ngoreihr1bgds2dbeaos9uu.apps.googleusercontent.com"
+    );
+  }, []);
 
   return (
     <ThemeProvider value={theme}>
@@ -236,6 +245,7 @@ function AppContainer() {
             navigationBarColor: theme.colors.surface,
           }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="+not-found" />
         </Stack>
         <StatusBar style="auto" />

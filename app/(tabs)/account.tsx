@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useContext } from "react";
+import React, { useMemo, useState, useContext, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -11,7 +11,7 @@ import {
   TextInput,
   Switch,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { AntDesign, Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@react-navigation/native";
 import { BAR_HEIGHT, getBottomContentPadding } from "../_layout";
@@ -22,6 +22,8 @@ import { toggleTheme } from "@/redux/slices/themeSlice";
 import Animated from "react-native-reanimated";
 import { mmkvStorage } from "@/mmkv/mmkvStorage";
 import { useTransactions } from "@/context/TransactionContext";
+import { router } from "expo-router";
+import auth from "@react-native-firebase/auth";
 
 type Profile = {
   name: string;
@@ -50,7 +52,7 @@ const Avatar = ({ label, size = 64 }: { label: string; size?: number }) => {
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: theme.colors.primary,
+          backgroundColor: theme.colors.tabActive,
         },
       ]}>
       <Text
@@ -159,9 +161,9 @@ const IconButton = ({ icon, onPress, mode = "standard", size = 24 }: any) => {
 
   const buttonStyle = [
     styles.iconButton,
-    mode === "contained" && { backgroundColor: theme.colors.primary },
+    mode === "contained" && { backgroundColor: theme.colors.tabActive },
     mode === "contained-tonal" && {
-      backgroundColor: theme.colors.primaryContainer,
+      backgroundColor: theme.colors.incomeCard,
     },
   ];
 
@@ -174,7 +176,11 @@ const IconButton = ({ icon, onPress, mode = "standard", size = 24 }: any) => {
 
   return (
     <TouchableOpacity style={buttonStyle} onPress={onPress}>
-      <Ionicons name={icon} size={size} color={iconColor} />
+      {typeof icon === "string" ? (
+        <Ionicons name={icon as any} size={size} color={iconColor} />
+      ) : (
+        icon()
+      )}
     </TouchableOpacity>
   );
 };
@@ -220,6 +226,60 @@ const ListItem = ({
   );
 };
 
+/* Support components */
+const LabeledInput = ({ label, rightIcon, style, ...props }: any) => {
+  const theme = useTheme();
+  const [focused, setFocused] = useState(false);
+  return (
+    <View style={[{ marginBottom: 8 }, style]}>
+      {!!label && (
+        <Text
+          style={{
+            color: theme.colors.text,
+            fontSize: 12,
+            fontWeight: "600",
+            marginBottom: 6,
+          }}>
+          {label}
+        </Text>
+      )}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          borderWidth: 1,
+          borderRadius: 8,
+          paddingHorizontal: 12,
+          minHeight: 44,
+          borderColor: focused ? theme.colors.primary : theme.colors.border,
+          backgroundColor: theme.colors.card,
+        }}>
+        <TextInput
+          {...props}
+          onFocus={(e) => {
+            setFocused(true);
+            props.onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            props.onBlur?.(e);
+          }}
+          placeholderTextColor={theme.colors.text + "80"}
+          style={{
+            flex: 1,
+            color: theme.colors.text,
+            paddingVertical: 8,
+            fontSize: 16,
+          }}
+        />
+        {rightIcon && (
+          <Ionicons name={rightIcon} size={18} color={theme.colors.text} />
+        )}
+      </View>
+    </View>
+  );
+};
+
 // Custom Chip Component
 const Chip = ({ children, selected, onPress, selectedColor }: any) => {
   const theme = useTheme();
@@ -256,7 +316,27 @@ export default function AccountScreen(): JSX.Element {
   const insets = useSafeAreaInsets();
 
   // Local editable state
-  const [profile, setProfile] = useState<Profile>(INITIAL_PROFILE);
+  // Firebase Auth state
+  const [fbUser, setFbUser] = useState(auth().currentUser ?? null);
+  const [authInit, setAuthInit] = useState(true);
+
+  console.log("Who is currently signed in: ", fbUser);
+
+  useEffect(() => {
+    const unsub = auth().onAuthStateChanged((u) => {
+      setFbUser(u);
+      setAuthInit(false);
+    });
+    return unsub;
+  }, []);
+
+  // Local editable state
+  const [profile, setProfile] = useState<Profile>({
+    ...INITIAL_PROFILE,
+    name: fbUser?.displayName ?? "",
+    email: fbUser?.email ?? "",
+    // phone: fbUser?.phoneNumber ?? "",
+  });
   const [editing, setEditing] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [preferredFormat, setPreferredFormat] = useState<
@@ -266,19 +346,51 @@ export default function AccountScreen(): JSX.Element {
   const { autoSync, syncAllTransactions, setAutoSync } = useTransactions();
 
   const initials = useMemo(() => {
-    const parts = profile.name.trim().split(/\s+/);
+    const base = profile.name || profile.email || "U";
+    const parts = base.trim().split(/\s+/);
     return parts
       .slice(0, 2)
       .map((p) => p[0]?.toUpperCase() ?? "")
       .join("");
-  }, [profile.name]);
+  }, [profile.name, profile.email]);
 
-  const onSave = () => {
-    setEditing(false);
-    Alert.alert("Saved", "Account details updated successfully.");
+  useEffect(() => {
+    if (fbUser) {
+      setProfile((prev) => ({
+        ...prev,
+        name: fbUser.displayName ?? "",
+        email: fbUser.email ?? "",
+        phone: fbUser.phoneNumber ?? "",
+      }));
+    }
+  }, [fbUser?.displayName, fbUser?.email, fbUser?.phoneNumber]);
+
+  const onSave = async () => {
+    if (!fbUser) {
+      Alert.alert("Sign in required", "Please sign in to update your profile.");
+      return;
+    }
+    try {
+      if (profile.name !== (fbUser.displayName ?? "")) {
+        await fbUser.updateProfile({ displayName: profile.name });
+      }
+      if (profile.email !== (fbUser.email ?? "")) {
+        await fbUser.updateEmail(profile.email);
+      }
+      setEditing(false);
+      Alert.alert("Saved", "Account details updated successfully.");
+    } catch (e: any) {
+      Alert.alert("Update failed", e?.message ?? "Could not update profile.");
+    }
   };
 
   const onCancel = () => {
+    setProfile({
+      ...profile,
+      name: fbUser?.displayName ?? "",
+      email: fbUser?.email ?? "",
+      phone: fbUser?.phoneNumber ?? "",
+    });
     setEditing(false);
   };
 
@@ -287,13 +399,10 @@ export default function AccountScreen(): JSX.Element {
   };
 
   const onBackup = () => {
-    syncAllTransactions()
-      .then(() => Alert.alert("Backup & Sync", "Syncing Done!", []))
-      .catch(() => Alert.alert("Backup & Sync", "Syncing Done!", []));
+    syncAllTransactions();
     Alert.alert(
       "Backup & Sync",
-      autoSync ? "Auto sync is ON. Syncing now…" : "Syncing once…",
-      []
+      autoSync ? "Auto sync is ON. Syncing now…" : "Syncing once…"
     );
   };
 
@@ -315,14 +424,19 @@ export default function AccountScreen(): JSX.Element {
     );
   };
 
-  const onSignOut = () => {
+  const onSignOut = async () => {
     Alert.alert("Sign out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Sign out",
         style: "destructive",
         onPress: async () => {
-          Alert.alert("Signed out", "Come back soon!");
+          try {
+            await auth().signOut();
+            Alert.alert("Signed out", "Come back soon!");
+          } catch (e: any) {
+            Alert.alert("Sign out failed", e?.message ?? "Please try again.");
+          }
         },
       },
     ]);
@@ -358,13 +472,13 @@ export default function AccountScreen(): JSX.Element {
                 <Text style={[styles.helloSmall]}>Account</Text>
               </View>
               <TouchableOpacity
-                onPress={handleToggleTheme}
+                onPress={onSignOut}
                 style={styles.badgeIcon}
                 activeOpacity={0.7}>
-                {themePref === "dark" ? (
-                  <Ionicons name="partly-sunny" size={18} color="#FFFFFF" />
+                {!!fbUser ? (
+                  <Ionicons name="log-out-outline" size={18} color="#FFFFFF" />
                 ) : (
-                  <Ionicons name="cloudy-night" size={18} color="#FFFFFF" />
+                  <Ionicons name="log-in-outline" size={18} color="#FFFFFF" />
                 )}
               </TouchableOpacity>
             </View>
@@ -373,20 +487,274 @@ export default function AccountScreen(): JSX.Element {
                 flexDirection: "column",
                 alignItems: "center",
               }}>
-              <Button
-                style={{
-                  marginLeft: 8,
-                  width: "40%",
-                  backgroundColor: theme.colors.primary,
-                }}
-                textColor={"#ffffff"}
-                onPress={onBackup}
-                compact>
-                Sync now
-              </Button>
+              {!!fbUser ? (
+                <Button
+                  style={{
+                    marginLeft: 8,
+                    width: "40%",
+                    backgroundColor: theme.colors.primary,
+                    borderWidth: 1,
+                    borderColor: "white",
+                  }}
+                  textColor={"#ffffff"}
+                  onPress={onBackup}
+                  compact>
+                  Sync now
+                </Button>
+              ) : (
+                <Button
+                  style={{
+                    marginLeft: 8,
+                    width: "40%",
+                    backgroundColor: theme.colors.primary,
+                    borderWidth: 1,
+                    borderColor: "white",
+                  }}
+                  textColor={"#ffffff"}
+                  onPress={() => {
+                    router.push("/login");
+                  }}
+                  compact>
+                  Login to Sync
+                </Button>
+              )}
             </View>
           </Animated.View>
         </LinearGradient>
+
+        {/* Signed-out view: Sign-in CTA */}
+        {!fbUser ? (
+          <Card>
+            <CardTitle title="Account" />
+            <Divider />
+            <View style={{ padding: 16 }}>
+              <ListItem
+                title="Not signed in"
+                description={"Sign in to back up and sync data"}
+                leftIcon="person-circle-outline"
+                rightComponent={
+                  !!fbUser ? (
+                    <Button
+                      style={{
+                        marginLeft: 8,
+                        // width: "40%",
+                        backgroundColor: theme.colors.tabActive,
+                      }}
+                      textColor={"#ffffff"}
+                      onPress={onBackup}
+                      compact>
+                      Sync now
+                    </Button>
+                  ) : (
+                    <Button
+                      style={{
+                        marginLeft: 8,
+                        // width: "40%",
+                        backgroundColor: theme.colors.tabActive,
+                      }}
+                      textColor={"#ffffff"}
+                      onPress={() => {
+                        router.push("/login");
+                      }}
+                      compact>
+                      Login
+                    </Button>
+                  )
+                }
+              />
+            </View>
+          </Card>
+        ) : (
+          <>
+            {/* Signed-in view: Profile Header */}
+            <Card>
+              <View style={{ padding: 16 }}>
+                <View style={styles.headerRow}>
+                  <Avatar label={initials || "A"} size={64} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    {!editing ? (
+                      <>
+                        <Text
+                          style={[
+                            styles.name,
+                            { color: theme.colors.text, fontSize: 18 },
+                          ]}>
+                          {profile.name || "Unnamed"}
+                        </Text>
+                        <Text
+                          style={{ opacity: 0.7, color: theme.colors.text }}>
+                          {profile.email || "No email"}
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <LabeledInput
+                          label="Name"
+                          value={profile.name}
+                          onChangeText={(t: string) =>
+                            setProfile((p) => ({ ...p, name: t }))
+                          }
+                          style={{ marginBottom: 8 }}
+                        />
+                        <LabeledInput
+                          label="Email"
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          value={profile.email}
+                          onChangeText={(t: string) =>
+                            setProfile((p) => ({ ...p, email: t }))
+                          }
+                        />
+                      </>
+                    )}
+                  </View>
+                  {!editing && (
+                    <IconButton
+                      icon={() => {
+                        return (
+                          <AntDesign
+                            name="edit"
+                            color={theme.colors.text}
+                            size={15}
+                          />
+                        );
+                      }}
+                      mode="contained-tonal"
+                      onPress={() => setEditing(true)}
+                    />
+                  )}
+                </View>
+                {!!editing && (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      marginLeft: 8,
+                      justifyContent: "center",
+                      gap: 5,
+                      marginTop: 2,
+                    }}>
+                    <IconButton
+                      icon={() => {
+                        return (
+                          <AntDesign name="save" color={"white"} size={18} />
+                        );
+                      }}
+                      mode="contained"
+                      onPress={onSave}
+                    />
+                    <IconButton
+                      icon={() => {
+                        return (
+                          <AntDesign name="close" color={"white"} size={18} />
+                        );
+                      }}
+                      mode="contained"
+                      onPress={onCancel}
+                    />
+                  </View>
+                )}
+              </View>
+            </Card>
+
+            {/* Personal details */}
+            {/* <Card>
+              <CardTitle title="Personal details" />
+              <Divider />
+              <View style={{ padding: 16, paddingTop: 8 }}>
+                {!editing ? (
+                  <View style={{ gap: 10 }}>
+                    <ListItem
+                      title="Phone"
+                      description={profile.phone || "Not set"}
+                      leftIcon="call-outline"
+                    />
+                    <ListItem
+                      title="Currency"
+                      description={profile.currency}
+                      leftIcon="cash-outline"
+                    />
+                    <ListItem
+                      title="Country"
+                      description={profile.country}
+                      leftIcon="location-outline"
+                    />
+                  </View>
+                ) : (
+                  <>
+                    <LabeledInput
+                      label="Phone"
+                      keyboardType="phone-pad"
+                      value={profile.phone || ""}
+                      onChangeText={(t: string) =>
+                        setProfile((p) => ({ ...p, phone: t }))
+                      }
+                      style={{ marginBottom: 12 }}
+                    />
+                    <LabeledInput
+                      label="Currency"
+                      value={profile.currency}
+                      onChangeText={(t: string) =>
+                        setProfile((p) => ({ ...p, currency: t }))
+                      }
+                      rightIcon="chevron-down"
+                      style={{ marginBottom: 12 }}
+                    />
+                    <LabeledInput
+                      label="Country"
+                      value={profile.country}
+                      onChangeText={(t: string) =>
+                        setProfile((p) => ({ ...p, country: t }))
+                      }
+                      rightIcon="chevron-down"
+                    />
+                  </>
+                )}
+              </View>
+            </Card> */}
+          </>
+        )}
+
+        {/* Preferences */}
+        <Card>
+          <CardTitle title="Preferences" />
+          <Divider />
+          <View style={{ padding: 16 }}>
+            <ListItem
+              title="Dark mode"
+              leftIcon={themePref === "dark" ? "moon" : "sunny-outline"}
+              rightComponent={
+                <Switch
+                  value={themePref === "dark"}
+                  onValueChange={handleToggleTheme}
+                />
+              }
+            />
+            {/* <Divider style={{ marginVertical: 8 }} /> */}
+            {/* <Text
+              style={{
+                marginBottom: 8,
+                color: theme.colors.text,
+                fontWeight: "600",
+              }}>
+              Number/Currency format
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {(["system", "indian", "international"] as const).map((opt) => (
+                <Chip
+                  key={opt}
+                  selected={preferredFormat === opt}
+                  onPress={() => setPreferredFormat(opt)}
+                  selectedColor={theme.colors.primary}>
+                  {opt === "system"
+                    ? "System default"
+                    : opt === "indian"
+                    ? "Indian (1,00,000)"
+                    : "International (100,000)"}
+                </Chip>
+              ))}
+            </View> */}
+          </View>
+        </Card>
 
         {/* Data & Security */}
         <Card>
@@ -396,7 +764,7 @@ export default function AccountScreen(): JSX.Element {
             <ListItem
               title="Backup & Sync"
               description={autoSync ? "Auto sync enabled" : "Manual sync"}
-              leftIcon="cloud"
+              leftIcon="cloud-outline"
               rightComponent={
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <Switch value={autoSync} onValueChange={setAutoSync} />
@@ -407,14 +775,14 @@ export default function AccountScreen(): JSX.Element {
             <ListItem
               title="Export transactions (CSV)"
               description="Download a CSV of all transactions"
-              leftIcon="log-out-sharp"
+              leftIcon="log-out-outline"
               onPress={onExport}
             />
             <Divider />
             <ListItem
               title="Clear local data"
               description="Remove data from this device"
-              leftIcon="trash"
+              leftIcon="trash-outline"
               onPress={onClearLocal}
             />
           </View>
@@ -431,33 +799,53 @@ export default function AccountScreen(): JSX.Element {
                 ios: "1.0.0 (100)",
                 android: "1.0.0 (100)",
               })}
-              leftIcon="information-circle"
+              leftIcon="information-circle-outline"
             />
+            <Divider />
             <ListItem
               title="Privacy policy"
-              leftIcon="shield"
+              leftIcon="shield-outline"
               onPress={() => Linking.openURL("https://example.com/privacy")}
             />
+            <Divider />
             <ListItem
               title="Terms of use"
-              leftIcon="document-text"
+              leftIcon="document-text-outline"
               onPress={() => Linking.openURL("https://example.com/terms")}
             />
           </View>
         </Card>
 
         {/* Sign out */}
-        <Button
-          contentStyle={{
-            backgroundColor: theme.colors.primary,
-          }}
-          textColor={theme.colors.text}
-          mode="contained-tonal"
-          icon="exit"
-          onPress={onSignOut}
-          style={{ alignSelf: "center", marginTop: 4 }}>
-          Sign out
-        </Button>
+        {!!fbUser ? (
+          <Button
+            contentStyle={{
+              backgroundColor: theme.colors.primary,
+            }}
+            textColor={"white"}
+            mode="contained-tonal"
+            icon="exit"
+            onPress={onSignOut}
+            color="white"
+            style={{ alignSelf: "center", marginTop: 4 }}>
+            Sign out
+          </Button>
+        ) : (
+          <Button
+            contentStyle={{
+              backgroundColor: theme.colors.primary,
+            }}
+            textColor={"white"}
+            mode="contained-tonal"
+            icon="exit"
+            onPress={() => {
+              router.push("/login");
+            }}
+            color="white"
+            style={{ alignSelf: "center", marginTop: 4 }}>
+            Sign in
+          </Button>
+        )}
       </ScrollView>
     </View>
   );

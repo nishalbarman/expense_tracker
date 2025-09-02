@@ -6,6 +6,7 @@ export interface Transaction {
   date: string;
   notes: string;
   synced: boolean;
+  userId: string;
 }
 
 export interface TransactionContextType {

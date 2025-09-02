@@ -1,6 +1,10 @@
+// context/TransactionContext.tsx
 // import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
-import firestore from "@react-native-firebase/firestore";
+import firestore, {
+  FirebaseFirestoreTypes,
+} from "@react-native-firebase/firestore";
+import auth from "@react-native-firebase/auth";
 import React, {
   createContext,
   ReactNode,
@@ -11,9 +15,31 @@ import React, {
 import "react-native-get-random-values";
 import Toast from "react-native-toast-message";
 import { v4 as uuidv4 } from "uuid";
-// import { sampleTransactions } from "../data/transactionCategories";
 import type { Transaction, TransactionContextType } from "../types";
 import { mmkvStorage } from "@/mmkv/mmkvStorage";
+
+/**
+ * IMPORTANT: Ensure Firestore Security Rules restrict per-user access.
+ * Example rule patterns:
+ *
+ * 1) Flat collection with userId field:
+ * match /databases/{db}/documents {
+ *   match /transactions/{id} {
+ *     allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+ *   }
+ * }
+ *
+ * Queries must include where("userId","==",auth.uid) to match rules. [5][2]
+ *
+ * 2) Alternative structure: /users/{uid}/transactions/{id}
+ * match /databases/{db}/documents {
+ *   match /users/{userId}/transactions/{id} {
+ *     allow read, write: if request.auth != null && request.auth.uid == userId;
+ *   }
+ * }
+ *
+ * Either approach is OK. This provider uses the flat collection + userId field. [5]
+ */
 
 const TransactionContext = createContext<TransactionContextType | undefined>(
   undefined
@@ -41,6 +67,22 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
   const [loading, setLoading] = useState(true);
   const [autoSync, setAutoSync] = useState(true);
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
+  const [uid, setUid] = useState<string | null>(null);
+
+  // Listen to auth state (anonymous or logged-in) and set UID
+  useEffect(() => {
+    const unsub = auth().onAuthStateChanged(async (user) => {
+      if (!user) {
+        // ensure user is signed in anonymously to get a UID
+        // const cred = await auth().signInAnonymously();
+        // setUid(cred.user.uid);
+        setUid(null);
+      } else {
+        setUid(user.uid);
+      }
+    });
+    return unsub;
+  }, []);
 
   useEffect(() => {
     mmkvStorage.getItem("autoSync").then((val) => {
@@ -62,25 +104,27 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
       .catch(() => {});
   }, []);
 
+  // Initialize after uid is available
   useEffect(() => {
+    if (!uid) return;
     const initialize = async () => {
-      await loadTransactions();
+      await loadTransactions(uid);
       setLoading(false);
     };
     initialize();
 
     const unsubscribe = NetInfo.addEventListener((state) => {
-      if (state.isConnected && !loading && autoSync) {
+      if (state.isConnected && !loading && autoSync && !isSyncing) {
         syncAllTransactions();
       }
     });
-
     return unsubscribe;
-  }, [loading, autoSync]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid, autoSync]);
 
-  // And also run sync when autoSync toggles on
+  // Run sync when autoSync toggles on
   useEffect(() => {
-    if (autoSync && !loading) {
+    if (autoSync && !loading && !isSyncing) {
       syncAllTransactions();
     }
   }, [autoSync, loading]);
@@ -94,21 +138,37 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
   };
 
   /**
-   * Load transactions from mmkvStorage or initialize with sample data
+   * Load transactions for current user from local cache; if empty, fetch from server
    */
-  const loadTransactions = async (): Promise<void> => {
+  const loadTransactions = async (userId: string): Promise<void> => {
     try {
       const storedTransactions = await mmkvStorage.getItem("transactions");
-
       if (storedTransactions) {
-        setTransactions(JSON.parse(storedTransactions));
+        const all = JSON.parse(storedTransactions) as Transaction[];
+        // Filter to current user only in case previous sessions cached other users (defensive)
+        const mine = all.filter((t) => t.userId === userId);
+        setTransactions(mine);
+        // Optional: also hydrate from server to refresh
+        if (mine.length === 0) {
+          const lastSyncTime = await getLastSyncTime(userId);
+          const serverTransactions = await fetchServerTransactions(
+            userId,
+            lastSyncTime
+          );
+          setTransactions(serverTransactions);
+          await saveTransactions(serverTransactions);
+          await updateLastSyncTime(userId, new Date().toISOString());
+        }
       } else {
         // No local transactions → fetch from server
         const lastSyncTime = new Date(0).toISOString(); // fetch all
-        const serverTransactions = await fetchServerTransactions(lastSyncTime);
+        const serverTransactions = await fetchServerTransactions(
+          userId,
+          lastSyncTime
+        );
         setTransactions(serverTransactions);
         await saveTransactions(serverTransactions);
-        await updateLastSyncTime(new Date().toISOString());
+        await updateLastSyncTime(userId, new Date().toISOString());
       }
     } catch (error) {
       console.error("Error loading transactions:", error);
@@ -121,16 +181,18 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
   };
 
   /**
-   * Add a new transaction
+   * Add a new transaction (for current user only)
    */
   const addTransaction = async (
-    newTransaction: Omit<Transaction, "id" | "synced">
+    newTransaction: Omit<Transaction, "id" | "synced" | "userId">
   ): Promise<void> => {
     try {
+      if (!uid) throw new Error("No user");
       const transactionWithId: Transaction = {
         ...newTransaction,
         id: uuidv4(),
         synced: false,
+        userId: uid,
       };
 
       const updatedTransactions = [...transactions, transactionWithId];
@@ -142,9 +204,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
         transactionWithId,
       ]);
 
-      /**
-       * Attempt to sync after adding
-       */
+      // Attempt to sync after adding
       await syncSingleTransaction(transactionWithId);
     } catch (error) {
       console.error("Error adding transaction:", error);
@@ -157,16 +217,85 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
   };
 
   /**
+   * Update an existing transaction (offline-first, mark unsynced)
+   */
+  const updateTransaction = async (next: Transaction): Promise<void> => {
+    try {
+      if (!uid) throw new Error("No user");
+      if (next.userId !== uid) {
+        Toast.show({
+          type: "error",
+          text1: "Not allowed",
+          text2: "Cannot edit another user's transaction.",
+        });
+        return;
+      }
+
+      const exists = transactions.some((t) => t.id === next.id);
+      if (!exists) {
+        Toast.show({
+          type: "error",
+          text1: "Not found",
+          text2: "Transaction does not exist.",
+        });
+        return;
+      }
+
+      const updated: Transaction = { ...next, userId: uid, synced: false };
+
+      setTransactions((prev) => {
+        const arr = prev.map((t) => (t.id === updated.id ? updated : t));
+        saveTransactions(arr).catch(() => {});
+        return arr;
+      });
+
+      // Try remote update (best-effort)
+      await attemptUpdateTransaction(updated.id, {
+        amount: updated.amount,
+        category: updated.category,
+        date: updated.date,
+        notes: updated.notes,
+        type: updated.type,
+        userId: uid,
+        timestamp: firestore.Timestamp.fromDate(new Date(updated.date)),
+      });
+
+      await markTransactionAsSynced(updated.id);
+      Toast.show({
+        type: "success",
+        text1: "Updated",
+        text2: "Changes saved.",
+      });
+    } catch (err) {
+      console.error("Error updating transaction:", err);
+      Toast.show({
+        type: "error",
+        text1: "Update failed",
+        text2: "Saved locally. Will retry when online.",
+      });
+    }
+  };
+
+  /**
    * Delete a transaction locally first; try remote delete; on failure queue for retry.
    */
   const deleteTransaction = async (id: string): Promise<void> => {
     try {
+      if (!uid) throw new Error("No user");
       const existing = transactions.find((t) => t.id === id);
       if (!existing) {
         Toast.show({
           type: "info",
           text1: "Not found",
           text2: "Transaction already removed.",
+        });
+        return;
+      }
+      if (existing.userId !== uid) {
+        Toast.show({
+          type: "error",
+          text1: "Not allowed",
+          text2: "Cannot delete another user's transaction.",
         });
         return;
       }
@@ -212,7 +341,6 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
     while (attempt < MAX_RETRIES) {
       try {
         await firestore().collection("transactions").doc(id).delete();
-
         // On success, remove from pending queue if present
         setPendingDeleteIds((prev) => {
           const next = prev.filter((x) => x !== id);
@@ -230,21 +358,63 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
   };
 
   /**
-   * Get unsynced transactions
+   * Attempt Firestore update with retry and connectivity check
    */
-  const getUnsyncedTransactions = (): Transaction[] => {
-    return transactions.filter((tx) => !tx.synced);
+  const attemptUpdateTransaction = async (
+    id: string,
+    patch: {
+      amount: number;
+      category: string;
+      date: string;
+      notes?: string;
+      type: Transaction["type"];
+      userId: string;
+      timestamp: FirebaseFirestoreTypes.Timestamp | any;
+    }
+  ): Promise<void> => {
+    const net = await NetInfo.fetch();
+    if (!net.isConnected) throw new Error("Offline");
+
+    const MAX_RETRIES = 5;
+    let attempt = 0;
+    let delay = 1000;
+
+    while (attempt < MAX_RETRIES) {
+      try {
+        // If doc may not exist, you can use set({ ...patch }, { merge: true })
+        await firestore()
+          .collection("transactions")
+          .doc(id)
+          .update(patch as any);
+        return;
+      } catch (e: any) {
+        attempt += 1;
+        if (attempt >= MAX_RETRIES) throw e;
+        await sleep(delay);
+        delay *= 2;
+      }
+    }
   };
 
   /**
-   * Fetch new transactions from the server
+   * Get unsynced transactions (current user only)
+   */
+  const getUnsyncedTransactions = (): Transaction[] => {
+    return transactions.filter((tx) => !tx.synced && tx.userId === uid);
+  };
+
+  /**
+   * Fetch new transactions from the server for current user
    */
   const fetchServerTransactions = async (
+    userId: string,
     lastSyncTime: string
   ): Promise<Transaction[]> => {
     try {
+      // Query constrained by userId to satisfy rules and limit result set to the user. [5]
       const querySnapshot = await firestore()
         .collection("transactions")
+        .where("userId", "==", userId)
         .where(
           "timestamp",
           ">",
@@ -255,7 +425,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
       const serverTransactions: Transaction[] = [];
 
       querySnapshot.forEach((doc) => {
-        const data = doc.data();
+        const data = doc.data() as any;
         serverTransactions.push({
           id: doc.id,
           amount: data.amount,
@@ -263,6 +433,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
           date: data.date,
           notes: data.notes,
           type: data.type,
+          userId: data.userId,
           synced: true,
         });
       });
@@ -275,11 +446,11 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
   };
 
   /**
-   * Get the last synchronization timestamp
+   * Get the last synchronization timestamp per user
    */
-  const getLastSyncTime = async (): Promise<string> => {
+  const getLastSyncTime = async (userId: string): Promise<string> => {
     try {
-      const lastSync = await mmkvStorage.getItem("lastSyncTime");
+      const lastSync = await mmkvStorage.getItem(`lastSyncTime:${userId}`);
       return lastSync || new Date(0).toISOString();
     } catch (error) {
       console.error("Error getting last sync time:", error);
@@ -288,35 +459,39 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
   };
 
   /**
-   * Update the last synchronization timestamp
+   * Update the last synchronization timestamp per user
    */
-  const updateLastSyncTime = async (timestamp: string): Promise<void> => {
+  const updateLastSyncTime = async (
+    userId: string,
+    timestamp: string
+  ): Promise<void> => {
     try {
-      await mmkvStorage.setItem("lastSyncTime", timestamp);
+      await mmkvStorage.setItem(`lastSyncTime:${userId}`, timestamp);
     } catch (error) {
       console.error("Error updating last sync time:", error);
     }
   };
 
   /**
-   * Merge server transactions into local transactions
+   * Merge server transactions into local transactions (current user scope)
    */
   const mergeTransactions = async (serverTransactions: Transaction[]) => {
     try {
       setTransactions((prevTransactions) => {
-        const localTransactionsMap = new Map(
-          prevTransactions.map((tx) => [tx.id, tx])
-        );
+        const localMap = new Map(prevTransactions.map((tx) => [tx.id, tx]));
         const merged = [...prevTransactions];
 
         serverTransactions.forEach((serverTx) => {
-          if (!localTransactionsMap.has(serverTx.id)) {
+          if (!localMap.has(serverTx.id)) {
             merged.push({ ...serverTx, synced: true });
           }
         });
 
-        saveTransactions(merged).catch(() => {});
-        return merged;
+        // Also keep only current user's transactions in cache
+        const onlyMine = uid ? merged.filter((t) => t.userId === uid) : merged;
+
+        saveTransactions(onlyMine).catch(() => {});
+        return onlyMine;
       });
     } catch (error) {
       console.error("Error merging transactions:", error);
@@ -352,9 +527,6 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
         return;
       }
 
-      /**
-       *  Attempt to sync the single transaction
-       */
       await attemptSyncTransaction(transaction);
     } catch (error) {
       console.error("Sync failed for transaction:", transaction.id, error);
@@ -431,21 +603,25 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
   };
 
   /**
-   * Upload a single transaction to Firestore
+   * Upload a single transaction to Firestore (includes userId)
    */
   const uploadTransaction = async (transaction: Transaction): Promise<void> => {
     try {
       await firestore()
         .collection("transactions")
         .doc(transaction.id)
-        .set({
-          amount: transaction.amount,
-          category: transaction.category,
-          date: transaction.date,
-          notes: transaction.notes,
-          type: transaction.type,
-          timestamp: firestore.Timestamp.fromDate(new Date(transaction.date)),
-        });
+        .set(
+          {
+            amount: transaction.amount,
+            category: transaction.category,
+            date: transaction.date,
+            notes: transaction.notes,
+            type: transaction.type,
+            userId: transaction.userId, // critical for per-user scoping [5]
+            timestamp: firestore.Timestamp.fromDate(new Date(transaction.date)),
+          },
+          { merge: true }
+        );
       console.log("Uploaded transaction to Firestore:", transaction.id);
     } catch (error) {
       console.error("Error uploading transaction:", error);
@@ -461,6 +637,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
       console.log("Currently syncing. Please wait.");
       return;
     }
+    if (!uid) return;
 
     setIsSyncing(true);
     console.log("Starting bulk sync process...");
@@ -495,7 +672,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
         }
       }
 
-      // 2) Upload unsynced transactions
+      // 2) Upload unsynced transactions for current user
       const unsyncedTransactions = getUnsyncedTransactions();
       console.log(`Found ${unsyncedTransactions.length} unsynced transactions`);
 
@@ -526,25 +703,21 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
   };
 
   /**
-   * Fetch and merge server transactions
+   * Fetch and merge server transactions for current user
    */
   const fetchAndMergeServerTransactions = async (): Promise<void> => {
     try {
-      const lastSyncTime = await getLastSyncTime();
-      const serverTransactions = await fetchServerTransactions(lastSyncTime);
+      if (!uid) return;
+      const lastSyncTime = await getLastSyncTime(uid);
+      const serverTransactions = await fetchServerTransactions(
+        uid,
+        lastSyncTime
+      );
 
       if (serverTransactions.length > 0) {
-        /**
-         * Merge with local transactions
-         */
         await mergeTransactions(serverTransactions);
-
-        /**
-         *  Update last sync time
-         */
         const newSyncTime = new Date().toISOString();
-        await updateLastSyncTime(newSyncTime);
-
+        await updateLastSyncTime(uid, newSyncTime);
         Toast.show({
           type: "success",
           text1: "Sync Complete",
@@ -573,6 +746,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({
         transactions,
         addTransaction,
         deleteTransaction,
+        updateTransaction,
         syncAllTransactions,
         isSyncing,
         autoSync,
