@@ -20,8 +20,8 @@
       },
       "package": "com.technoapps.expensetracker",
       "googleServicesFile": "./google/google-services.json",
-      "versionCode": 16,
-      "version": "1.2.3",
+      "versionCode": 41,
+      "version": "1.4.1",
       "edgeToEdgeEnabled": true
     },
     "web": {

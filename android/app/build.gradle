@@ -92,8 +92,8 @@ android {
         applicationId 'com.technoapps.expensetracker'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 40
-        versionName "1.4.0"
+        versionCode 41
+        versionName "1.4.1"
     }
     signingConfigs {
         debug {

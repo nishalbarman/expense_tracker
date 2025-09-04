@@ -1,9 +1,18 @@
 // context/TransactionContext.tsx
 
 import NetInfo from "@react-native-community/netinfo";
-import firestore, { FirebaseFirestoreTypes } from "@react-native-firebase/firestore";
+import firestore, {
+  FirebaseFirestoreTypes,
+} from "@react-native-firebase/firestore";
 import auth from "@react-native-firebase/auth";
-import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
+import React, {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import "react-native-get-random-values";
 import Toast from "react-native-toast-message";
 import { v4 as uuidv4 } from "uuid";
@@ -56,7 +65,12 @@ const ToastIds = {
   SyncFailed: "toast-sync-failed",
 };
 
-const showToastOnce = (type: "info" | "success" | "error", id: string, text1: string, text2?: string) => {
+const showToastOnce = (
+  type: "info" | "success" | "error",
+  id: string,
+  text1: string,
+  text2?: string
+) => {
   // @ts-ignore react-native-toast-message has isVisible(id) starting v3; if not, emulate via internal store or track locally
   const anyToastVisible = (Toast as any)?.isVisible?.(id);
   if (anyToastVisible) return;
@@ -68,14 +82,21 @@ const showToastOnce = (type: "info" | "success" | "error", id: string, text1: st
 const LOCAL_UID = "__local__";
 type SyncAnchor = { lastDocPath: string | null };
 
-const TransactionContext = createContext<TransactionContextType | undefined>(undefined);
+const TransactionContext = createContext<TransactionContextType | undefined>(
+  undefined
+);
 export const useTransactions = (): TransactionContextType => {
   const context = useContext(TransactionContext);
-  if (context === undefined) throw new Error("useTransactions must be used within a TransactionProvider");
+  if (context === undefined)
+    throw new Error(
+      "useTransactions must be used within a TransactionProvider"
+    );
   return context;
 };
 
-interface TransactionProviderProps { children: ReactNode; }
+interface TransactionProviderProps {
+  children: ReactNode;
+}
 
 const KEY_TX_ALL = "transactions";
 const KEY_AUTO_SYNC = "autoSync";
@@ -88,7 +109,9 @@ const userQuery = (uid: string) =>
     .where("userId", "==", uid)
     .orderBy("timestamp", "asc"); // rule-aligned and stable ordering [11]
 
-export const TransactionProvider: React.FC<TransactionProviderProps> = ({ children }) => {
+export const TransactionProvider: React.FC<TransactionProviderProps> = ({
+  children,
+}) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
@@ -125,16 +148,45 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
     mmkvStorage.setItem(KEY_AUTO_SYNC, String(autoSync));
   }, [autoSync]);
 
+  const liveUnsubRef = { current: null as null | (() => void) };
+
   // Auth listener (subscribe once)
   useEffect(() => {
     const unsub = auth().onAuthStateChanged(async (user) => {
       const nextUid = user?.uid ?? null;
       setUid(nextUid);
 
+      // Tear down any previous live listener
+      if (liveUnsubRef.current) {
+        liveUnsubRef.current();
+        liveUnsubRef.current = null;
+      }
+
       if (nextUid) {
         await migrateLocalTransactionsToUid(nextUid);
         await loadTransactions(nextUid);
         setLoading(false);
+
+        // Start live subscription for this user's changes
+        try {
+          const q = userQuery(nextUid);
+          const liveUnsub = q.onSnapshot(
+            { includeMetadataChanges: true }, // deliver cached first, then server
+            async (snap) => {
+              // Apply only incremental changes
+              const changes = snap.docChanges();
+              if (changes.length > 0) {
+                await applyLiveChanges(nextUid, changes);
+              }
+            },
+            (err) => {
+              log.error("Live listener error:", err);
+            }
+          );
+          liveUnsubRef.current = liveUnsub;
+        } catch (e) {
+          log.error("Failed to start live listener:", e);
+        }
 
         if (pendingIntent === "sync_all") {
           setPendingIntent(null);
@@ -221,7 +273,10 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
         setTransactions(mine);
         if (mine.length === 0) {
           const anchor = await getSyncAnchor(userId);
-          const { items, newAnchor } = await fetchServerTransactions(userId, anchor);
+          const { items, newAnchor } = await fetchServerTransactions(
+            userId,
+            anchor
+          );
           const mergedAll = mergeIntoAllCache(all, items);
           await saveAllTransactions(mergedAll);
           await setSyncAnchor(userId, newAnchor);
@@ -229,19 +284,29 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
         }
       } else {
         const anchor0: SyncAnchor = { lastDocPath: null };
-        const { items, newAnchor } = await fetchServerTransactions(userId, anchor0);
+        const { items, newAnchor } = await fetchServerTransactions(
+          userId,
+          anchor0
+        );
         await saveAllTransactions(items);
         await setSyncAnchor(userId, newAnchor);
         setTransactions(items.filter((t) => t.userId === userId));
       }
     } catch (error) {
       log.error("Error loading transactions:", error);
-      showToastOnce("error", ToastIds.SyncFailed, "Error", "Failed to load transactions.");
+      showToastOnce(
+        "error",
+        ToastIds.SyncFailed,
+        "Error",
+        "Failed to load transactions."
+      );
     }
   };
 
   // CRUD
-  const addTransaction = async (newTx: Omit<Transaction, "id" | "synced" | "userId">) => {
+  const addTransaction = async (
+    newTx: Omit<Transaction, "id" | "synced" | "userId">
+  ) => {
     const user = auth().currentUser;
     const effectiveUid = user?.uid ?? LOCAL_UID;
     const tx: Transaction = {
@@ -263,7 +328,9 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
   const updateTransaction = async (next: Transaction) => {
     const updated = { ...next, synced: false };
     setTransactions((prev) => {
-      const visibleUpdated = prev.map((t) => (t.id === updated.id ? updated : t));
+      const visibleUpdated = prev.map((t) =>
+        t.id === updated.id ? updated : t
+      );
       mmkvStorage.getItem(KEY_TX_ALL).then((stored) => {
         const all = stored ? (JSON.parse(stored) as Transaction[]) : [];
         const allUpdated = all.map((t) => (t.id === updated.id ? updated : t));
@@ -363,13 +430,16 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
     let delay = 1000;
     while (attempt < MAX_RETRIES) {
       try {
-        await firestore().collection("transactions").doc(id).set(
-          {
-            ...patch,
-            timestamp: firestore.FieldValue.serverTimestamp(),
-          } as any,
-          { merge: true }
-        );
+        await firestore()
+          .collection("transactions")
+          .doc(id)
+          .set(
+            {
+              ...patch,
+              timestamp: firestore.FieldValue.serverTimestamp(),
+            } as any,
+            { merge: true }
+          );
         return;
       } catch (e: any) {
         attempt += 1;
@@ -430,7 +500,10 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
     return { items, newAnchor };
   };
 
-  const mergeIntoAllCache = (all: Transaction[], serverTransactions: Transaction[]): Transaction[] => {
+  const mergeIntoAllCache = (
+    all: Transaction[],
+    serverTransactions: Transaction[]
+  ): Transaction[] => {
     const byId = new Map(all.map((tx) => [tx.id, tx]));
     for (const s of serverTransactions) {
       if (!byId.has(s.id)) {
@@ -447,7 +520,9 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
     return all;
   };
 
-  const syncSingleTransaction = async (transaction: Transaction): Promise<void> => {
+  const syncSingleTransaction = async (
+    transaction: Transaction
+  ): Promise<void> => {
     if (isSyncing) {
       queuedUploadsRef.current.add(transaction.id);
       return;
@@ -455,17 +530,29 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
     try {
       const netState = await NetInfo.fetch();
       if (!netState.isConnected) {
-        showToastOnce("info", ToastIds.Offline, "Offline Mode", "Using local data. Will sync when online.");
+        showToastOnce(
+          "info",
+          ToastIds.Offline,
+          "Offline Mode",
+          "Using local data. Will sync when online."
+        );
         return;
       }
       await attemptSyncTransaction(transaction);
     } catch (error) {
       log.error("Sync failed for transaction:", transaction.id, error);
-      showToastOnce("error", ToastIds.SyncFailed, "Sync Failed", "Will retry when online.");
+      showToastOnce(
+        "error",
+        ToastIds.SyncFailed,
+        "Sync Failed",
+        "Will retry when online."
+      );
     }
   };
 
-  const attemptSyncTransaction = async (transaction: Transaction): Promise<void> => {
+  const attemptSyncTransaction = async (
+    transaction: Transaction
+  ): Promise<void> => {
     const MAX_RETRIES = 5;
     let attempt = 0;
     let success = false;
@@ -495,8 +582,15 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
           await sleep(delay + Math.floor(Math.random() * 250));
           delay *= 2;
         } else {
-          log.error(`Failed to upload transaction ${transaction.id} after ${MAX_RETRIES} attempts`);
-          showToastOnce("error", ToastIds.SyncFailed, "Sync Error", `Failed to sync transaction.`);
+          log.error(
+            `Failed to upload transaction ${transaction.id} after ${MAX_RETRIES} attempts`
+          );
+          showToastOnce(
+            "error",
+            ToastIds.SyncFailed,
+            "Sync Error",
+            `Failed to sync transaction.`
+          );
         }
       }
     }
@@ -505,10 +599,14 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
   const markTransactionAsSynced = async (id: string): Promise<void> => {
     try {
       setTransactions((prev) => {
-        const updatedVisible = prev.map((tx) => (tx.id === id ? { ...tx, synced: true } : tx));
+        const updatedVisible = prev.map((tx) =>
+          tx.id === id ? { ...tx, synced: true } : tx
+        );
         mmkvStorage.getItem(KEY_TX_ALL).then((stored) => {
           const all = stored ? (JSON.parse(stored) as Transaction[]) : [];
-          const updatedAll = all.map((tx) => (tx.id === id ? { ...tx, synced: true } : tx));
+          const updatedAll = all.map((tx) =>
+            tx.id === id ? { ...tx, synced: true } : tx
+          );
           saveAllTransactions(updatedAll).catch((error) => {
             log.error("Error saving to mmkvStorage:", error);
           });
@@ -523,7 +621,12 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
   const requireLogin = async () => {
     if (auth().currentUser?.uid) return true;
     // One toast only
-    showToastOnce("info", ToastIds.LoginRequired, "Login required", "Sign in to sync & back up.");
+    showToastOnce(
+      "info",
+      ToastIds.LoginRequired,
+      "Login required",
+      "Sign in to sync & back up."
+    );
     return false;
   };
 
@@ -537,7 +640,12 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
     try {
       const netState = await NetInfo.fetch();
       if (!netState.isConnected) {
-        showToastOnce("info", ToastIds.Offline, "Offline Mode", "Using local data. Will sync when online.");
+        showToastOnce(
+          "info",
+          ToastIds.Offline,
+          "Offline Mode",
+          "Using local data. Will sync when online."
+        );
         return;
       }
 
@@ -580,10 +688,20 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
       await fetchAndMergeServerTransactions();
 
       // Single “Sync Done” toast
-      showToastOnce("success", ToastIds.SyncDone, "Sync Complete", "Data is up to date.");
+      showToastOnce(
+        "success",
+        ToastIds.SyncDone,
+        "Sync Complete",
+        "Data is up to date."
+      );
     } catch (error) {
       log.error("Bulk sync process failed:", error);
-      showToastOnce("error", ToastIds.SyncFailed, "Sync Failed", "Changes saved locally. Will retry when online.");
+      showToastOnce(
+        "error",
+        ToastIds.SyncFailed,
+        "Sync Failed",
+        "Changes saved locally. Will retry when online."
+      );
     } finally {
       setIsSyncing(false);
     }
@@ -604,7 +722,78 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
     }
   };
 
-  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const applyLiveChanges = async (
+    userId: string,
+    changes: FirebaseFirestoreTypes.DocumentChange[]
+  ) => {
+    // Load current full cache
+    const stored = await mmkvStorage.getItem(KEY_TX_ALL);
+    const all = stored ? (JSON.parse(stored) as Transaction[]) : [];
+
+    // Index for fast lookups and in-place updates
+    const indexById = new Map(all.map((t, i) => [t.id, i]));
+
+    let mutated = false;
+
+    for (const change of changes) {
+      const doc = change.doc;
+      const id = doc.id;
+      const data = doc.data() as any;
+
+      if (change.type === "removed") {
+        if (indexById.has(id)) {
+          const removeIdx = indexById.get(id)!;
+          all.splice(removeIdx, 1);
+          indexById.delete(id);
+          // Rebuild index after splice
+          for (let i = removeIdx; i < all.length; i++)
+            indexById.set(all[i].id, i);
+          mutated = true;
+        }
+        continue;
+      }
+
+      // added or modified: build normalized Transaction
+      const normalized: Transaction = {
+        id,
+        amount: data.amount,
+        category: data.category,
+        date: data.date,
+        notes: data.notes,
+        type: data.type,
+        userId: data.userId,
+        synced: true,
+      };
+
+      if (indexById.has(id)) {
+        // merge existing and new, mark synced
+        const idx = indexById.get(id)!;
+        const merged = { ...all[idx], ...normalized, synced: true };
+        all[idx] = merged;
+        mutated = true;
+      } else {
+        // push new
+        all.push(normalized);
+        indexById.set(id, all.length - 1);
+        mutated = true;
+      }
+    }
+
+    if (mutated) {
+      // Optional: keep local ordering aligned with server ordering key
+      all.sort((a, b) => {
+        // timestamp is server-side; fall back to date string if needed
+        // If date is ISO yyyy-mm-dd, string compare works; otherwise parse to number
+        return (a.date || "").localeCompare(b.date || "");
+      });
+
+      await saveAllTransactions(all);
+      setTransactions(all.filter((t) => t.userId === userId));
+    }
+  };
+
+  const sleep = (ms: number) =>
+    new Promise((resolve) => setTimeout(resolve, ms));
 
   return (
     <TransactionContext.Provider
@@ -617,8 +806,7 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
         isSyncing,
         autoSync,
         setAutoSync: (value: boolean) => setAutoSync(value),
-      }}
-    >
+      }}>
       {children}
     </TransactionContext.Provider>
   );
