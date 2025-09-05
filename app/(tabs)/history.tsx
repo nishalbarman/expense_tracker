@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -10,7 +10,6 @@ import {
   TextInput,
   Platform,
 } from "react-native";
-import { useTransactions } from "../../context/TransactionContext";
 import type { Transaction } from "../../types";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { HistoryItem } from "@/components/HistoryItem";
@@ -21,10 +20,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@react-navigation/native";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { toggleTheme } from "@/redux/slices/themeSlice";
+import { useGetTxPageQuery } from "@/redux/api/localTxApi"; // RTK Query over SQLite
 
 type FilterType = "all" | "income" | "expense";
 
-// Custom SearchBar Component
 const CustomSearchBar = ({
   placeholder,
   value,
@@ -34,7 +33,6 @@ const CustomSearchBar = ({
 }: any) => {
   const theme = useTheme();
   const [isFocused, setIsFocused] = useState(false);
-
   return (
     <View
       style={[
@@ -65,100 +63,65 @@ const CustomSearchBar = ({
   );
 };
 
-// Custom Card Component
 const CustomCard = ({ children, style, ...props }: any) => {
   const theme = useTheme();
   return (
     <View
-      style={[
-        styles.card,
-        {
-          backgroundColor: theme.colors.card,
-          // Elevation/shadow stays for both themes; background is themed
-        },
-        style,
-      ]}
+      style={[styles.card, { backgroundColor: theme.colors.card }, style]}
       {...props}>
       {children}
     </View>
   );
 };
 
-// Custom Chip Component (used in commented alternative)
-const CustomChip = ({ children, selected, onPress, icon, style }: any) => {
-  const theme = useTheme();
-
-  return (
-    <TouchableOpacity
-      style={[
-        styles.chip,
-        {
-          backgroundColor: selected ? theme.colors.primary : "transparent",
-          borderColor: selected ? theme.colors.primary : theme.colors.border,
-        },
-        style,
-      ]}
-      onPress={onPress}
-      activeOpacity={0.7}>
-      {icon && (
-        <Ionicons
-          name={icon}
-          size={16}
-          color={
-            selected
-              ? (theme.colors as any).onPrimary ?? theme.colors.card
-              : theme.colors.text
-          }
-          style={{ marginRight: 6 }}
-        />
-      )}
-      <Text
-        style={[
-          styles.chipText,
-          {
-            color: selected
-              ? (theme.colors as any).onPrimary ?? theme.colors.card
-              : theme.colors.text,
-            fontWeight: selected ? "700" : "600",
-          },
-        ]}>
-        {children}
-      </Text>
-    </TouchableOpacity>
-  );
-};
-
 export default function TransactionHistoryScreen(): JSX.Element {
-  const { transactions } = useTransactions();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 
+  // Auth uid from thin UI slice; fall back to guest profile
+  const uid = useAppSelector((s) => s.transactionsUI.uid) ?? "__local__";
+
+  // Client filters
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState<FilterType>("all");
-  const [refreshing, setRefreshing] = useState(false);
 
-  // Sort once (desc by date)
-  const sorted = useMemo(
-    () =>
-      [...transactions].sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      ),
-    [transactions]
+  // Cursor pagination state
+  const PAGE_SIZE = 30;
+  const [cursor, setCursor] = useState<
+    { dateIso: string; id: string } | undefined
+  >();
+  const [pages, setPages] = useState<any[]>([]);
+
+  // Fetch a page from SQLite
+  const { data, isFetching, refetch, isUninitialized } = useGetTxPageQuery(
+    { userId: uid, pageSize: PAGE_SIZE, cursor },
+    { skip: !uid }
   );
 
-  // Filter by chips and search
+  // Accumulate pages when cursor advances
+  useEffect(() => {
+    if (!data?.items) return;
+    // If cursor is undefined, we’re refreshing — reset pages
+    if (!cursor) setPages(data.items);
+    else setPages((prev) => [...prev, ...data.items]);
+  }, [data?.items]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Derive list before UI filters
+  const allItems = pages;
+
+  // Client search/type filters (fast on current page set)
+  const q = searchQuery.trim().toLowerCase();
   const filtered = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return sorted.filter((t) => {
+    return allItems.filter((t) => {
       const matchesType = selectedType === "all" || t.type === selectedType;
       if (!q) return matchesType;
       const hay = `${t.category} ${t.notes || ""}`.toLowerCase();
       return matchesType && hay.includes(q);
     });
-  }, [sorted, searchQuery, selectedType]);
+  }, [allItems, selectedType, q]);
 
   const renderItem = useCallback(
-    ({ item, index }: { item: Transaction; index: number }) => (
+    ({ item, index }: { item: any; index: number }) => (
       <Animated.View
         style={{
           borderRadius: 5,
@@ -172,25 +135,33 @@ export default function TransactionHistoryScreen(): JSX.Element {
               shadowOpacity: theme.dark ? 0.25 : 0.1,
               shadowRadius: theme.dark ? 10 : 8,
             },
-            android: {
-              elevation: 2,
-            },
+            android: { elevation: 2 },
           }),
         }}
         entering={FadeInUp.delay(Math.min(index, 12) * 40).duration(280)}>
+        {/* HistoryItem expects fields: id, amount, category, dateIso, notes, type, synced */}
         <HistoryItem index={index} item={item} />
       </Animated.View>
     ),
     [theme.colors.card, theme.dark]
   );
 
-  const keyExtractor = useCallback((item: Transaction) => item.id, []);
+  const keyExtractor = useCallback((item: any) => item.id, []);
 
+  const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await new Promise((r) => setTimeout(r, 600));
+    // Reset cursor to fetch newest page, and reset accumulated pages in effect
+    setCursor(undefined);
+    await refetch();
     setRefreshing(false);
-  }, []);
+  }, [refetch]);
+
+  const loadMore = useCallback(() => {
+    if (isFetching) return;
+    const next = data?.nextCursor;
+    if (next) setCursor(next);
+  }, [isFetching, data?.nextCursor]);
 
   const GRADIENT = useMemo(() => {
     const start = theme.colors.primary;
@@ -199,14 +170,9 @@ export default function TransactionHistoryScreen(): JSX.Element {
   }, [theme.colors]);
 
   const dispatch = useAppDispatch();
-
   const { themePref } = useAppSelector((state) => state.theme);
+  const handleToggleTheme = () => dispatch(toggleTheme());
 
-  const handleToggleTheme = () => {
-    dispatch(toggleTheme());
-  };
-
-  // Header that scrolls WITH the list
   const ListHeader = (
     <>
       <LinearGradient
@@ -245,16 +211,9 @@ export default function TransactionHistoryScreen(): JSX.Element {
 
       <View
         style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12 }}>
-        {/* Horizontal tabs */}
         <Animated.View>
           <View
-            style={[
-              styles.chartTabs,
-              {
-                backgroundColor: theme.colors.card,
-                // keep elevation/shadow via styles
-              },
-            ]}>
+            style={[styles.chartTabs, { backgroundColor: theme.colors.card }]}>
             {(["all", "income", "expense"] as FilterType[]).map((type) => {
               const isActive = selectedType === type;
               return (
@@ -262,9 +221,7 @@ export default function TransactionHistoryScreen(): JSX.Element {
                   key={type}
                   style={[
                     styles.tab,
-                    isActive && {
-                      backgroundColor: theme.colors.primary,
-                    },
+                    isActive && { backgroundColor: theme.colors.primary },
                   ]}
                   onPress={() => setSelectedType(type)}
                   activeOpacity={0.7}>
@@ -284,8 +241,6 @@ export default function TransactionHistoryScreen(): JSX.Element {
             })}
           </View>
         </Animated.View>
-
-        {/* Alternative chips approach available below */}
       </View>
     </>
   );
@@ -322,28 +277,18 @@ export default function TransactionHistoryScreen(): JSX.Element {
         ListEmptyComponent={ListEmpty}
         contentContainerStyle={[
           styles.listContent,
-          {
-            paddingBottom: getBottomContentPadding(insets.bottom, 57),
-          },
+          { paddingBottom: getBottomContentPadding(insets.bottom, 57) },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         initialNumToRender={12}
         windowSize={10}
         removeClippedSubviews
-        ItemSeparatorComponent={() => (
-          <View
-            style={{
-              height: 1,
-              backgroundColor: theme.dark
-                ? "rgba(255,255,255,0.08)"
-                : "rgba(0,0,0,0.06)",
-            }}
-          />
-        )}
+        onEndReachedThreshold={0.5}
+        onEndReached={loadMore}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
+            refreshing={refreshing || (isFetching && !cursor && !pages.length)}
             onRefresh={onRefresh}
             colors={[theme.colors.tabActive]}
             progressBackgroundColor={theme.colors.card}
@@ -357,7 +302,6 @@ export default function TransactionHistoryScreen(): JSX.Element {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   flatList: { flex: 1 },
-
   badgeIcon: {
     width: 36,
     height: 36,
@@ -366,7 +310,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   hero: {
     paddingHorizontal: 16,
     paddingBottom: 18,
@@ -380,10 +323,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   helloSmall: { fontSize: 13 },
-
   listContent: { paddingBottom: 24 },
-
-  // Search Bar Styles
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -400,24 +340,12 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
       },
-      android: {
-        elevation: 2,
-      },
+      android: { elevation: 2 },
     }),
   },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    paddingVertical: 4,
-  },
-  searchBar: {
-    height: 50,
-  },
-
-  // Tab Styles
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 15, paddingVertical: 4 },
+  searchBar: { height: 50 },
   chartTabs: {
     flexDirection: "row",
     borderRadius: 16,
@@ -429,9 +357,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
       },
-      android: {
-        elevation: 2,
-      },
+      android: { elevation: 2 },
     }),
   },
   tab: {
@@ -444,12 +370,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 6,
   },
-  tabText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  // Card Styles
+  tabText: { fontSize: 13, fontWeight: "600" },
   card: {
     borderRadius: 12,
     ...Platform.select({
@@ -459,13 +380,9 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.08,
         shadowRadius: 12,
       },
-      android: {
-        elevation: 4,
-      },
+      android: { elevation: 4 },
     }),
   },
-
-  // Chips (for alternative implementation)
   chipsRow: {
     paddingTop: 13,
     paddingBottom: 8,
@@ -482,34 +399,16 @@ const styles = StyleSheet.create({
     minHeight: 36,
     borderWidth: 1,
   },
-  chipStyle: {
-    marginRight: 8,
-  },
-  chipText: {
-    fontSize: 12,
-  },
-
-  // Empty State
-  emptyCard: {
-    marginHorizontal: 16,
-    marginTop: 12,
-  },
-  emptyCardContent: {
-    padding: 16,
-    alignItems: "center",
-  },
+  chipStyle: { marginRight: 8 },
+  chipText: { fontSize: 12 },
+  emptyCard: { marginHorizontal: 16, marginTop: 12 },
+  emptyCardContent: { padding: 16, alignItems: "center" },
   emptyTitle: {
     fontSize: 16,
     fontWeight: "600",
     textAlign: "center",
     marginBottom: 6,
   },
-  emptyDescription: {
-    fontSize: 14,
-    textAlign: "center",
-    opacity: 0.7,
-  },
-
-  // Other
+  emptyDescription: { fontSize: 14, textAlign: "center", opacity: 0.7 },
   separator: { height: 1 },
 });

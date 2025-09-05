@@ -27,6 +27,13 @@ import { persistor, store } from "@/redux/store";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { setTheme } from "@/redux/slices/themeSlice";
 import { configureGoogleSignin } from "@/utils/auth/google";
+import { getAuth } from "@react-native-firebase/auth";
+import { migrateMmkvToSqlite } from "@/db/sqlite/mmkvToSqlite";
+import {
+  startAuthWatch,
+  startNetWatch,
+} from "@/redux/slices/transactionsUISlice";
+import { runMigrations } from "@/db/sqlite/client";
 // import { getAuth, signInAnonymously } from "@react-native-firebase/auth";
 
 const lightTheme = {
@@ -236,6 +243,21 @@ function AppContainer() {
       "429536141601-0eqkt3d88ngoreihr1bgds2dbeaos9uu.apps.googleusercontent.com"
     );
   }, []);
+
+  // const dispatch = useAppDispatch();
+
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    (async () => {
+      runMigrations(); // ensure tables/indexes [4]
+      const uid = getAuth().currentUser?.uid ?? undefined;
+      await migrateMmkvToSqlite(uid); // optional one-time import
+      store.dispatch(startAuthWatch());
+      store.dispatch(startNetWatch());
+      setReady(true);
+    })();
+  }, []);
+  if (!ready) return null; // or splash
 
   return (
     <ThemeProvider value={theme}>

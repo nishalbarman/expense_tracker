@@ -11,11 +11,15 @@ import {
 } from "redux-persist";
 import { mmkvStorage } from "@/mmkv/mmkvStorage";
 
+import transactionsUI from "@/redux/slices/transactionsUISlice";
 import themeReducer from "./slices/themeSlice";
+import { localTxApi } from "./api/localTxApi";
 
 const rootReducer = combineReducers({
   //   user: userReducer,
   theme: themeReducer,
+  transactionsUI: transactionsUI,
+  [localTxApi.reducerPath]: localTxApi.reducer,
 });
 
 const persistConfig = {
@@ -24,6 +28,7 @@ const persistConfig = {
   whitelist: [
     // "user",
     "theme",
+    "transactionsUI",
   ], // persist both
 };
 
@@ -36,7 +41,7 @@ export const store = configureStore({
       serializableCheck: {
         ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
       },
-    }),
+    }).concat(localTxApi.middleware),
 });
 
 // 🔹 Infer types for useDispatch & useSelector
