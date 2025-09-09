@@ -1,8 +1,8 @@
+// src/store/transactionSlice.ts
 import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
 import auth from "@react-native-firebase/auth";
 import NetInfo from "@react-native-community/netinfo";
-import { syncWithFirestore } from "@/db/sync/firestoreSync";
-import { showToastOnce, ToastIds } from "@/utils/toast";
+import { requestSyncWithCooldown, runSync } from "../thunk/txThunk";
 
 type UIState = {
   uid: string | null;
@@ -44,45 +44,6 @@ export const startNetWatch = createAsyncThunk(
   }
 );
 
-export const requestSyncWithCooldown = createAsyncThunk(
-  "txUI/requestSync",
-  async (_, { getState, dispatch }) => {
-    const s = (getState() as any).transactionsUI as UIState;
-    const now = Date.now();
-    if (s.isSyncing || now - s.lastSyncTriggeredAt < 4000) return;
-    dispatch(setLastSyncTriggeredAt(now));
-    dispatch(runSync());
-  }
-);
-
-export const runSync = createAsyncThunk(
-  "txUI/runSync",
-  async (_, { getState, dispatch }) => {
-    try {
-      const s = (getState() as any).transactionsUI as UIState;
-      dispatch(setIsSyncing(true));
-      showToastOnce("info", ToastIds.Syncing, "Syncing", "Please wait...");
-      await syncWithFirestore(s.uid ?? "__local__"); // writes and reads sync to SQLite
-      showToastOnce(
-        "success",
-        ToastIds.SyncDone,
-        "Sync Complete",
-        "Data is up to date."
-      );
-    } catch (err) {
-      console.log(err);
-      showToastOnce(
-        "error",
-        ToastIds.SyncFailed,
-        "Sync Failed",
-        "Changes saved locally. Will retry when online."
-      );
-    } finally {
-      dispatch(setIsSyncing(false));
-    }
-  }
-);
-
 const slice = createSlice({
   name: "transactionsUI",
   initialState,
@@ -112,4 +73,5 @@ export const {
   setLastSyncTriggeredAt,
   setAutoSyncState,
 } = slice.actions;
+
 export default slice.reducer;

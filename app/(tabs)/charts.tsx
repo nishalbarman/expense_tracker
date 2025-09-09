@@ -18,6 +18,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@react-navigation/native";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { toggleTheme } from "@/redux/slices/themeSlice";
+import { useFetchUserSummaryChartQuery } from "@/redux/api/localTxApi";
+import { useFocusEffect } from "expo-router";
 
 type ChartType = "pie" | "bar" | "line";
 
@@ -41,48 +43,46 @@ const monthKeys = [
 ];
 
 export default function ChartsScreen(): JSX.Element {
-  const { transactions } = useTransactions();
+  // const { transactions } = useTransactions();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const [chartType, setChartType] = useState<ChartType>("pie");
 
+  const uid = useAppSelector((s) => s.transactionsUI.uid) ?? "__local__";
+  const {
+    data: financialData,
+    isFetching,
+    refetch,
+    isUninitialized,
+    error,
+  } = useFetchUserSummaryChartQuery({ userId: uid }, { skip: !uid });
+
+  console.log("Financial Data: ", financialData, error);
+
   // Calculate financial data
-  const financialData = useMemo(() => {
-    const byCat: Record<string, number> = {};
-    let totalExpenses = 0;
-    let totalIncome = 0;
+  // const financialData = useMemo(() => {
+  //   const byCat: Record<string, number> = {};
+  //   let totalExpenses = 0;
+  //   let totalIncome = 0;
 
-    for (const t of transactions) {
-      if (t.type === "expense") {
-        byCat[t.category] = (byCat[t.category] || 0) + t.amount;
-        totalExpenses += t.amount;
-      } else if (t.type === "income") {
-        totalIncome += t.amount;
-      }
-    }
+  //   for (const t of transactions) {
+  //     if (t.type === "expense") {
+  //       byCat[t.category] = (byCat[t.category] || 0) + t.amount;
+  //       totalExpenses += t.amount;
+  //     } else if (t.type === "income") {
+  //       totalIncome += t.amount;
+  //     }
+  //   }
 
-    return {
-      expensesByCategory: byCat,
-      totalExpenses,
-      totalIncome,
-      totalBalance: totalIncome - totalExpenses,
-    };
-  }, [transactions]);
+  //   return {
+  //     expensesByCategory: byCat,
+  //     totalExpenses,
+  //     totalIncome,
+  //     totalBalance: totalIncome - totalExpenses,
+  //   };
+  // }, [transactions]);
 
   // Monthly expense data
-  const monthsData = useMemo(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const monthly = Array(12).fill(0);
-
-    for (const t of transactions) {
-      if (t.type !== "expense") continue;
-      const d = new Date(t.date);
-      if (d.getFullYear() !== year) continue;
-      monthly[d.getMonth()] += t.amount;
-    }
-    return monthly;
-  }, [transactions]);
 
   // Color palette for categories (kept vivid for contrast on both themes)
   const palette = useMemo(
@@ -113,19 +113,21 @@ export default function ChartsScreen(): JSX.Element {
 
   // Map category -> color
   const categoryColors = useMemo(() => {
+    if (!financialData?.expensesByCategory) return {};
     const entries = Object.keys(financialData.expensesByCategory);
     const map: Record<string, string> = {};
     entries.forEach((cat, idx) => {
       map[cat] = palette[idx % palette.length];
     });
     return map;
-  }, [financialData.expensesByCategory, palette]);
+  }, [financialData]);
 
   const allCategoriesOrdered = useMemo(() => {
+    if (!financialData?.expensesByCategory) return [];
     return Object.entries(financialData.expensesByCategory).map(
       ([category, amount]) => ({ category, amount })
     );
-  }, [financialData.expensesByCategory]);
+  }, [financialData]);
 
   // Pie data
   const pieData = useMemo(() => {
@@ -148,13 +150,14 @@ export default function ChartsScreen(): JSX.Element {
 
   // Line data
   const lineData = useMemo(() => {
-    return monthsData.map((val, idx) => ({
+    if (!financialData?.monthlyExpenses) return [];
+    return financialData.monthlyExpenses.map((val: any, idx: number) => ({
       value: val,
       label: monthKeys[idx],
     }));
-  }, [monthsData]);
+  }, [financialData]);
 
-  const hasExpenseData = financialData.totalExpenses > 0;
+  const hasExpenseData = financialData?.totalExpense || -1 > 0;
 
   // Theming for charts and UI elements
   const textOnPrimary = (theme.colors as any).onPrimary ?? "#FFFFFF";
@@ -191,9 +194,9 @@ export default function ChartsScreen(): JSX.Element {
     </View>
   );
 
-  const GRADIENT = useMemo(() => {
-    return [theme.colors.primary, secondary];
-  }, [theme.colors, secondary]);
+  // const GRADIENT = useMemo(() => {
+  //   return [theme.colors.primary, secondary];
+  // }, [theme.colors, secondary]);
 
   const { themePref } = useAppSelector((state) => state.theme);
 
@@ -207,12 +210,12 @@ export default function ChartsScreen(): JSX.Element {
   const ChartSelector = () => (
     <>
       <LinearGradient
-        colors={GRADIENT}
+        colors={[theme.colors.primary, secondary]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.hero, { paddingTop: insets.top + 12 }]}>
         <View style={styles.heroHeader}>
-           <View>
+          <View>
             <Text style={styles.helloSmall}>Analytics</Text>
           </View>
           <TouchableOpacity
@@ -292,62 +295,64 @@ export default function ChartsScreen(): JSX.Element {
               { backgroundColor: theme.colors.primary + "20" },
             ]}>
             <Text style={[styles.totalAmount, { color: theme.colors.primary }]}>
-              ₹{financialData.totalExpenses.toFixed(2)}
+              ₹{financialData?.totalExpense?.toFixed(2)}
             </Text>
           </View>
         </View>
 
         <View style={styles.legendList}>
-          {allCategoriesOrdered
-            .sort((a, b) => b.amount - a.amount)
-            .map(({ category, amount }) => {
-              const percentage = (amount / financialData.totalExpenses) * 100;
-              const color = categoryColors[category];
+          {financialData?.totalExpense &&
+            Object.entries(financialData.expensesByCategory)
+              .map(([category, amount]) => ({ category, amount }))
+              // .sort((a, b) => b.amount - a.amount)
+              .map(({ category, amount }) => {
+                const percentage = (amount / financialData?.totalExpense) * 100;
+                const color = categoryColors[category];
 
-              return (
-                <View key={category} style={styles.legendItem}>
-                  <View
-                    style={[styles.categoryDot, { backgroundColor: color }]}
-                  />
-                  <View style={{ flex: 1 }}>
-                    {/* Row header */}
-                    <View style={styles.legendItemHeader}>
-                      <View style={styles.legendItemLeft}>
-                        <Text
-                          style={[
-                            styles.categoryName,
-                            { color: theme.colors.text },
-                          ]}>
-                          {category}
-                        </Text>
-                      </View>
-                      <View style={styles.amountContainer}>
-                        <Text
-                          style={[
-                            styles.categoryAmount,
-                            { color: theme.colors.text },
-                          ]}>
-                          ₹{amount.toFixed(0)}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Progress + percent */}
+                return (
+                  <View key={category} style={styles.legendItem}>
                     <View
-                      style={{ flexDirection: "row", alignItems: "center" }}>
-                      <ProgressBar percentage={percentage} color={color} />
-                      <Text
-                        style={[
-                          styles.categoryPercent,
-                          { color: onSurfaceVariant, marginLeft: 8 },
-                        ]}>
-                        {percentage.toFixed(1)}%
-                      </Text>
+                      style={[styles.categoryDot, { backgroundColor: color }]}
+                    />
+                    <View style={{ flex: 1 }}>
+                      {/* Row header */}
+                      <View style={styles.legendItemHeader}>
+                        <View style={styles.legendItemLeft}>
+                          <Text
+                            style={[
+                              styles.categoryName,
+                              { color: theme.colors.text },
+                            ]}>
+                            {category}
+                          </Text>
+                        </View>
+                        <View style={styles.amountContainer}>
+                          <Text
+                            style={[
+                              styles.categoryAmount,
+                              { color: theme.colors.text },
+                            ]}>
+                            ₹{amount?.toFixed(0)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Progress + percent */}
+                      <View
+                        style={{ flexDirection: "row", alignItems: "center" }}>
+                        <ProgressBar percentage={percentage} color={color} />
+                        <Text
+                          style={[
+                            styles.categoryPercent,
+                            { color: onSurfaceVariant, marginLeft: 8 },
+                          ]}>
+                          {percentage?.toFixed(1)}%
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              );
-            })}
+                );
+              })}
         </View>
 
         {/* Summary Stats */}
@@ -367,7 +372,8 @@ export default function ChartsScreen(): JSX.Element {
               Categories
             </Text>
             <Text style={[styles.statValue, { color: theme.colors.tabActive }]}>
-              {Object.keys(financialData.expensesByCategory).length}
+              {financialData?.expensesByCategory &&
+                Object.keys(financialData.expensesByCategory).length}
             </Text>
           </View>
           <View
@@ -380,10 +386,11 @@ export default function ChartsScreen(): JSX.Element {
             </Text>
             <Text style={[styles.statValue, { color: theme.colors.tabActive }]}>
               ₹
-              {(
-                financialData.totalExpenses /
-                  Object.keys(financialData.expensesByCategory).length || 0
-              ).toFixed(0)}
+              {financialData?.totalExpense &&
+                (
+                  financialData.totalExpense /
+                    Object.keys(financialData.expensesByCategory).length || 0
+                ).toFixed(0)}
             </Text>
           </View>
         </View>
@@ -454,7 +461,7 @@ export default function ChartsScreen(): JSX.Element {
                     ~₹
                     {(() => {
                       const num = Number(
-                        financialData.totalExpenses.toFixed(0)
+                        financialData?.totalExpense?.toFixed(0) || 0
                       );
                       if (num >= 1000000)
                         return `${(num / 1000000).toFixed(2)}M`;
@@ -513,7 +520,9 @@ export default function ChartsScreen(): JSX.Element {
         );
 
       case "line":
-        const hasMonthlyData = monthsData.some((value) => value > 0);
+        const hasMonthlyData = financialData?.monthlyExpenses?.some(
+          (value) => value > 0
+        );
         if (!hasMonthlyData) {
           return <EmptyState />;
         }

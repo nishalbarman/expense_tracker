@@ -9,7 +9,6 @@ import {
 import { StatusBar } from "expo-status-bar";
 
 import Toast from "react-native-toast-message";
-import { TransactionProvider } from "@/context/TransactionContext";
 import {
   DarkTheme,
   ThemeProvider,
@@ -34,7 +33,9 @@ import {
   startNetWatch,
 } from "@/redux/slices/transactionsUISlice";
 import { runMigrations } from "@/db/sqlite/client";
+import { migrateDbIfNeeded } from "@/db/sqlite/migrate";
 // import { getAuth, signInAnonymously } from "@react-native-firebase/auth";
+import "react-native-get-random-values";
 
 const lightTheme = {
   ...DefaultTheme,
@@ -249,30 +250,35 @@ function AppContainer() {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     (async () => {
-      runMigrations(); // ensure tables/indexes [4]
-      const uid = getAuth().currentUser?.uid ?? undefined;
-      await migrateMmkvToSqlite(uid); // optional one-time import
-      store.dispatch(startAuthWatch());
-      store.dispatch(startNetWatch());
-      setReady(true);
+      try {
+        migrateDbIfNeeded(); // ensure tables/indexes [4]
+        const uid = getAuth().currentUser?.uid ?? undefined;
+        await migrateMmkvToSqlite(uid); // optional one-time import
+        store.dispatch(startAuthWatch());
+        store.dispatch(startNetWatch());
+        setReady(true);
+      } catch (error) {
+        console.warn(error);
+      }
     })();
   }, []);
   if (!ready) return null; // or splash
 
   return (
     <ThemeProvider value={theme}>
-      <TransactionProvider>
-        <Stack
-          screenOptions={{
-            navigationBarColor: theme.colors.surface,
-          }}>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-        <StatusBar style="auto" />
-        <Toast />
-      </TransactionProvider>
+      {/* <TransactionProvider> */}
+      <Stack
+        screenOptions={{
+          navigationBarColor: theme.colors.surface,
+        }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(other)" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="+not-found" />
+      </Stack>
+      <StatusBar style="auto" />
+      <Toast />
+      {/* </TransactionProvider> */}
     </ThemeProvider>
   );
 }

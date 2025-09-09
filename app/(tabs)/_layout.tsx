@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Slot, Tabs } from "expo-router";
+import { router, Slot, Tabs } from "expo-router";
 import {
   View,
   TouchableOpacity,
@@ -17,12 +17,12 @@ import {
 } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 import Svg, { Path } from "react-native-svg";
-import { TransactionProvider } from "@/context/TransactionContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@react-navigation/native";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import Animated from "react-native-reanimated";
 import { toggleTheme } from "@/redux/slices/themeSlice";
+import CustomHeaderBar from "@/components/header/HeaderBar";
 
 export const BAR_HEIGHT = 72;
 const FAB_SIZE = 64;
@@ -51,147 +51,176 @@ export default function AppLayout() {
   const insets = useSafeAreaInsets();
 
   return (
-    <TransactionProvider>
-      <Tabs
-        screenOptions={{
-          headerStyle: { backgroundColor: theme.colors.primary },
-          headerTitleAlign: "center",
-          headerTitleStyle: { color: "white", fontWeight: "700" },
-          headerTintColor: "white",
-          tabBarStyle: { display: "none" },
+    <Tabs
+      screenOptions={{
+        headerStyle: { backgroundColor: theme.colors.primary },
+        headerTitleAlign: "center",
+        headerTitleStyle: { color: "white", fontWeight: "700" },
+        headerTintColor: "white",
+        tabBarStyle: { display: "none" },
 
-          headerBackground: (props) => {
+        headerBackground: (props) => {
+          return (
+            <LinearGradient
+              height="100%"
+              colors={GRADIENT}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.hero]}
+            />
+          );
+        },
+      }}
+      tabBar={(props) => <CustomBottomBar {...props} theme={theme} />}>
+      <Tabs.Screen
+        name="index"
+        options={{ title: "Dashboard", headerShown: false }}
+      />
+      <Tabs.Screen
+        name="add"
+        options={{
+          title: "Add New Transaction",
+          headerShown: true,
+
+          header: () => {
             return (
               <LinearGradient
-                height="100%"
-                colors={GRADIENT}
+                colors={[theme.colors.primary, theme.colors.secondary]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={[styles.hero]}
-              />
+                style={[styles.hero, { paddingTop: insets.top + 12 }]}>
+                <Animated.View>
+                  <View
+                    style={[
+                      styles.heroHeader,
+                      { backgroundColor: "transparent" },
+                    ]}>
+                    <View>
+                      <Text style={[styles.helloSmall]}>Add Transaction</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={handleToggleTheme}
+                      style={styles.badgeIcon}
+                      activeOpacity={0.7}>
+                      {themePref === "dark" ? (
+                        <Ionicons
+                          name="partly-sunny"
+                          size={18}
+                          color="#FFFFFF"
+                        />
+                      ) : (
+                        <Ionicons
+                          name="cloudy-night"
+                          size={18}
+                          color="#FFFFFF"
+                        />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </Animated.View>
+              </LinearGradient>
             );
           },
         }}
-        tabBar={(props) => <CustomBottomBar {...props} theme={theme} />}>
-        <Tabs.Screen
-          name="index"
-          options={{ title: "Dashboard", headerShown: false }}
-        />
-        <Tabs.Screen
-          name="add"
-          options={{
-            title: "Add New Transaction",
-            headerShown: true,
-
-            header: () => {
-              return (
-                <LinearGradient
-                  colors={[theme.colors.primary, theme.colors.secondary]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[styles.hero, { paddingTop: insets.top + 12 }]}>
-                  <Animated.View>
-                    <View
-                      style={[
-                        styles.heroHeader,
-                        { backgroundColor: "transparent" },
-                      ]}>
-                      <View>
-                        <Text style={[styles.helloSmall]}>Add Transaction</Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={handleToggleTheme}
-                        style={styles.badgeIcon}
-                        activeOpacity={0.7}>
-                        {themePref === "dark" ? (
-                          <Ionicons
-                            name="partly-sunny"
-                            size={18}
-                            color="#FFFFFF"
-                          />
-                        ) : (
-                          <Ionicons
-                            name="cloudy-night"
-                            size={18}
-                            color="#FFFFFF"
-                          />
-                        )}
-                      </TouchableOpacity>
+      />
+      <Tabs.Screen
+        name="scanner"
+        options={{
+          title: "Scanner",
+          headerShown: true,
+          header: () => {
+            return (
+              <LinearGradient
+                colors={[theme.colors.primary, theme.colors.secondary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.hero, { paddingTop: insets.top + 12 }]}>
+                <Animated.View>
+                  <View
+                    style={[
+                      styles.heroHeader,
+                      { backgroundColor: "transparent" },
+                    ]}>
+                    <View>
+                      <Text style={[styles.helloSmall]}>Scan Image</Text>
                     </View>
-                  </Animated.View>
-                </LinearGradient>
-              );
-            },
-          }}
-        />
-        <Tabs.Screen
-          name="scanner"
-          options={{
-            title: "Scanner",
-            headerShown: true,
-            header: () => {
-              return (
-                <LinearGradient
-                  colors={[theme.colors.primary, theme.colors.secondary]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[styles.hero, { paddingTop: insets.top + 12 }]}>
-                  <Animated.View>
-                    <View
-                      style={[
-                        styles.heroHeader,
-                        { backgroundColor: "transparent" },
-                      ]}>
-                      <View>
-                        <Text style={[styles.helloSmall]}>Scan Image</Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={handleToggleTheme}
-                        style={styles.badgeIcon}
-                        activeOpacity={0.7}>
-                        {themePref === "dark" ? (
-                          <Ionicons
-                            name="partly-sunny"
-                            size={18}
-                            color="#FFFFFF"
-                          />
-                        ) : (
-                          <Ionicons
-                            name="cloudy-night"
-                            size={18}
-                            color="#FFFFFF"
-                          />
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  </Animated.View>
-                </LinearGradient>
-              );
-            },
-          }}
-        />
-        <Tabs.Screen
-          name="history"
-          options={{ title: "History", headerShown: false }}
-        />
-        <Tabs.Screen
-          name="charts"
-          options={{
-            title: "Analytics",
-            headerShown: false,
-            headerShadowVisible: false,
-          }}
-        />
-        <Tabs.Screen
-          name="account"
-          options={{
-            title: "Account",
-            headerShown: false,
-          }}
-        />
-      </Tabs>
-      <Toast />
-    </TransactionProvider>
+                    <TouchableOpacity
+                      onPress={handleToggleTheme}
+                      style={styles.badgeIcon}
+                      activeOpacity={0.7}>
+                      {themePref === "dark" ? (
+                        <Ionicons
+                          name="partly-sunny"
+                          size={18}
+                          color="#FFFFFF"
+                        />
+                      ) : (
+                        <Ionicons
+                          name="cloudy-night"
+                          size={18}
+                          color="#FFFFFF"
+                        />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </Animated.View>
+              </LinearGradient>
+            );
+          },
+        }}
+      />
+      <Tabs.Screen
+        name="history"
+        options={{
+          title: "History",
+          headerShown: false,
+          // header: () => {
+          //   return (
+          //     <CustomHeaderBar
+          //       headerName="History"
+          //       rightIcon={(badgeIcon: any) => {
+          //         return (
+          //           <TouchableOpacity
+          //             onPress={() => {
+          //               router.push("/historytrash");
+          //             }}
+          //             style={badgeIcon}
+          //             activeOpacity={0.7}>
+          //             (
+          //             <Ionicons
+          //               name={
+          //                 theme.colors.primary === "#429690"
+          //                   ? "trash-outline"
+          //                   : "trash-outline"
+          //               }
+          //               size={18}
+          //               color="#FFFFFF"
+          //             />
+          //             )
+          //           </TouchableOpacity>
+          //         );
+          //       }}
+          //     />
+          //   );
+          // },
+        }}
+      />
+      <Tabs.Screen
+        name="charts"
+        options={{
+          title: "Analytics",
+          headerShown: false,
+          headerShadowVisible: false,
+        }}
+      />
+      <Tabs.Screen
+        name="account"
+        options={{
+          title: "Account",
+          headerShown: false,
+        }}
+      />
+    </Tabs>
   );
 }
 

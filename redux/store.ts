@@ -14,11 +14,13 @@ import { mmkvStorage } from "@/mmkv/mmkvStorage";
 import transactionsUI from "@/redux/slices/transactionsUISlice";
 import themeReducer from "./slices/themeSlice";
 import { localTxApi } from "./api/localTxApi";
+import { summaryTxApi } from "./api/summaryTxApi";
 
 const rootReducer = combineReducers({
   //   user: userReducer,
   theme: themeReducer,
   transactionsUI: transactionsUI,
+  [summaryTxApi.reducerPath]: summaryTxApi.reducer,
   [localTxApi.reducerPath]: localTxApi.reducer,
 });
 
@@ -41,7 +43,7 @@ export const store = configureStore({
       serializableCheck: {
         ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
       },
-    }).concat(localTxApi.middleware),
+    }).concat(localTxApi.middleware).concat(summaryTxApi.middleware),
 });
 
 // 🔹 Infer types for useDispatch & useSelector

@@ -9,7 +9,7 @@ import { StyleSheet, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-export default function CustomHeaderBar({ headerName }: any): JSX.Element {
+export default function CustomHeaderBar({ headerName, rightIcon }: any): JSX.Element {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -29,7 +29,7 @@ export default function CustomHeaderBar({ headerName }: any): JSX.Element {
           <View>
             <Text style={[styles.helloSmall]}>{headerName}</Text>
           </View>
-          <TouchableOpacity
+          {rightIcon ? rightIcon(styles.badgeIcon) : <TouchableOpacity
             onPress={handleToggleTheme}
             style={styles.badgeIcon}
             activeOpacity={0.7}>
@@ -44,7 +44,8 @@ export default function CustomHeaderBar({ headerName }: any): JSX.Element {
               color="#FFFFFF"
             />
             )
-          </TouchableOpacity>
+          </TouchableOpacity> }
+          
         </View>
       </Animated.View>
     </LinearGradient>

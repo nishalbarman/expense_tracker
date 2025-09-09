@@ -21,7 +21,6 @@ import { useTheme } from "@react-navigation/native";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { toggleTheme } from "@/redux/slices/themeSlice";
 import { useFetchTxPageQuery } from "@/redux/api/localTxApi"; // RTK Query over SQLite
-import { router } from "expo-router";
 
 type FilterType = "all" | "income" | "expense";
 
@@ -185,28 +184,10 @@ export default function TransactionHistoryScreen(): JSX.Element {
           <View style={[styles.heroHeader, { backgroundColor: "transparent" }]}>
             <View>
               <Text style={[styles.helloSmall, { color: "white" }]}>
-                History
+                Deleted Transactions
               </Text>
             </View>
             <TouchableOpacity
-              onPress={() => {
-                router.push("/historytrash");
-              }}
-              style={styles.badgeIcon}
-              activeOpacity={0.7}>
-              (
-              <Ionicons
-                name={
-                  theme.colors.primary === "#429690"
-                    ? "trash-outline"
-                    : "trash-outline"
-                }
-                size={18}
-                color="#FFFFFF"
-              />
-              )
-            </TouchableOpacity>
-            {/* <TouchableOpacity
               onPress={handleToggleTheme}
               style={styles.badgeIcon}
               activeOpacity={0.7}>
@@ -215,7 +196,7 @@ export default function TransactionHistoryScreen(): JSX.Element {
               ) : (
                 <Ionicons name="cloudy-night" size={18} color="#FFFFFF" />
               )}
-            </TouchableOpacity> */}
+            </TouchableOpacity>
           </View>
           <CustomSearchBar
             placeholder="Search category or notes"

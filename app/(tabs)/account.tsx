@@ -24,6 +24,11 @@ import { mmkvStorage } from "@/mmkv/mmkvStorage";
 import { useTransactions } from "@/context/TransactionContext";
 import { router } from "expo-router";
 import auth from "@react-native-firebase/auth";
+import {
+  requestSyncWithCooldown,
+  setAutoSyncState,
+} from "@/redux/slices/transactionsUISlice";
+import { useSelector } from "react-redux";
 
 type Profile = {
   name: string;
@@ -36,7 +41,7 @@ type Profile = {
 const INITIAL_PROFILE: Profile = {
   name: "Nishal Barman",
   email: "demo@gmail.com",
-  phone: "9101114906",
+  phone: "0123456789",
   currency: "INR ₹",
   country: "India",
 };
@@ -343,7 +348,8 @@ export default function AccountScreen(): JSX.Element {
     "system" | "indian" | "international"
   >("system");
 
-  const { autoSync, syncAllTransactions, setAutoSync } = useTransactions();
+  // const { autoSync, syncAllTransactions, setAutoSync } = useTransactions();
+  const { autoSync } = useAppSelector((s) => s.transactionsUI);
 
   const initials = useMemo(() => {
     const base = profile.name || profile.email || "U";
@@ -398,12 +404,16 @@ export default function AccountScreen(): JSX.Element {
     Alert.alert("Export started", "Preparing a CSV export of transactions…");
   };
 
-  const onBackup = () => {
-    syncAllTransactions();
-    Alert.alert(
-      "Backup & Sync",
-      autoSync ? "Auto sync is ON. Syncing now…" : "Syncing once…"
-    );
+  const onBackup = async () => {
+    const uid = auth().currentUser?.uid;
+    if (uid) {
+      dispatch(requestSyncWithCooldown());
+      // await dispatch(requestSyncWithCooldown()).unwrap();
+    }
+    // Alert.alert(
+    //   "Backup & Sync",
+    //   autoSync ? "Auto sync is ON. Syncing now…" : "Syncing once…"
+    // );
   };
 
   const onClearLocal = () => {
@@ -447,6 +457,10 @@ export default function AccountScreen(): JSX.Element {
 
   const handleToggleTheme = () => {
     dispatch(toggleTheme());
+  };
+
+  const handleAutoSyncChange = (value: boolean) => {
+    dispatch(setAutoSyncState(value));
   };
 
   return (
@@ -774,7 +788,10 @@ export default function AccountScreen(): JSX.Element {
               leftIcon="cloud-outline"
               rightComponent={
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Switch value={autoSync} onValueChange={setAutoSync} />
+                  <Switch
+                    value={autoSync}
+                    onValueChange={handleAutoSyncChange}
+                  />
                 </View>
               }
             />

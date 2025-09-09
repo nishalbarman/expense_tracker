@@ -12,8 +12,9 @@ import Animated, {
 } from "react-native-reanimated";
 import { useTheme, useNavigation } from "@react-navigation/native";
 import { Transaction } from "../types";
-import { useTransactions } from "@/context/TransactionContext";
 import { router } from "expo-router";
+import { useDeleteTransactionMutation } from "@/redux/api/localTxApi";
+import { useAppSelector } from "@/redux/hooks";
 
 interface HistoryItemProps {
   item: Transaction;
@@ -29,10 +30,15 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ item }) => {
       ? (theme.colors as any).tabActive
       : theme.colors.notification;
 
-  const { deleteTransaction } = useTransactions();
+  const [deleteTransaction] = useDeleteTransactionMutation();
+
+  const uid = useAppSelector((s) => s.transactionsUI.uid) ?? "__local__";
 
   const handleDeleteTransaction = (id: string) => {
-    if (deleteTransaction) deleteTransaction(id);
+    deleteTransaction({
+      id: id,
+      userId: uid,
+    });
   };
 
   // subtle rotation animation when not synced
@@ -115,7 +121,7 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ item }) => {
                   theme.colors.text + "60",
               },
             ]}>
-            {new Date(item.date).toLocaleDateString()}
+            {new Date(item.dateIso).toLocaleDateString()}
           </Text>
         </View>
 
@@ -124,7 +130,12 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ item }) => {
           activeOpacity={0.7}
           style={{ marginLeft: 12 }}
           onPress={() =>
-            router.navigate(`/add?mode=edit&t=${JSON.stringify(item)}`)
+            router.push({
+              pathname: `/add`,
+              params: {
+                txId: item.id,
+              },
+            })
           }>
           <Ionicons
             name="create-outline"

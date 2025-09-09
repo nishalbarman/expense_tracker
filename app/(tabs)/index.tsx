@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   StyleSheet,
@@ -19,6 +19,11 @@ import { TransactionItem } from "@/components/TransactionItem";
 import { useTheme } from "@react-navigation/native";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { toggleTheme } from "@/redux/slices/themeSlice";
+import {
+  useFetchRecentTxQuery,
+  useFetchTxPageQuery,
+  useGetUserSummaryQuery,
+} from "@/redux/api/localTxApi";
 
 // Custom Card Component
 const CustomCard = ({ children, style, onPress, ...props }: any) => {
@@ -61,33 +66,60 @@ const CustomButton = ({ children, onPress, compact = false, style }: any) => {
 };
 
 export default function HomeScreen(): JSX.Element {
-  const { transactions } = useTransactions();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 
+  // Auth uid from thin UI slice; fall back to guest profile
+  const uid = useAppSelector((s) => s.transactionsUI.uid) ?? "__local__";
+
+  // Cursor pagination state
+  const PAGE_SIZE = 5000;
+  // const [cursor, setCursor] = useState<
+  //   { dateIso: string; id: string } | undefined
+  // >();
+  // const [pages, setPages] = useState<any[]>([]);
+
+  // Fetch a page from SQLite
+  // const {
+  //   data: transactions,
+  //   isFetching,
+  //   refetch,
+  //   isUninitialized,
+  // } = useFetchTxPageQuery(
+  //   { userId: uid, pageSize: PAGE_SIZE, cursor: undefined },
+  //   { skip: !uid }
+  // );
+
+  const {
+    data: userSummaryData,
+    refetch: userSummaryRefetch,
+    isFetching: isUserSummaryFetching,
+    isLoading: isUserSummaryLoading,
+  } = useGetUserSummaryQuery({ userId: uid }, { skip: !uid });
+
+  console.log("User summary details: ", userSummaryData);
+
   // Metrics
   const totalIncome = useMemo(
-    () =>
-      transactions
-        .filter((t) => t.type === "income")
-        .reduce((s, t) => s + t.amount, 0),
-    [transactions]
+    () => userSummaryData?.totalIncome ?? 0,
+    [userSummaryData]
   );
   const totalExpenses = useMemo(
-    () =>
-      transactions
-        .filter((t) => t.type === "expense")
-        .reduce((s, t) => s + t.amount, 0),
-    [transactions]
+    () => userSummaryData?.totalExpense ?? 0,
+    [userSummaryData]
   );
-  const balance = totalIncome - totalExpenses;
+  const balance = useMemo(
+    () => userSummaryData?.balance ?? 0,
+    [userSummaryData]
+  );
 
-  const recent = useMemo(
-    () =>
-      [...transactions]
-        .sort((a, b) => +new Date(b.date) - +new Date(a.date))
-        .slice(0, 5),
-    [transactions]
+  const {
+    data: recent,
+    isFetching: isRecentFetching,
+    refetch: recentRefetch,
+  } = useFetchRecentTxQuery(
+    { userId: uid, pageSize: 5, cursor: undefined },
+    { skip: !uid }
   );
 
   // const GRADIENT = useMemo(() => {
@@ -271,11 +303,11 @@ export default function HomeScreen(): JSX.Element {
               },
             ]}>
             <View style={[styles.cardContent]}>
-              {recent.length > 0 ? (
-                recent.map((t, idx) => (
+              {recent?.items && recent.items?.length > 0 ? (
+                recent?.items.map((t, idx) => (
                   <View key={t.id ?? idx} style={styles.rowWrap}>
                     <TransactionItem transaction={t} />
-                    {idx !== recent.length - 1 && (
+                    {idx !== recent.items.length - 1 && (
                       <View style={styles.rowDivider} />
                     )}
                   </View>

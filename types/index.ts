@@ -1,12 +1,15 @@
 export interface Transaction {
   id: string;
+  userId: string;
   amount: number;
   category: string;
+  dateIso: string;
+  notes?: string;
   type: "income" | "expense";
-  date: string;
-  notes: string;
   synced: boolean;
-  userId: string;
+  updatedAt: number;
+  deleted?: boolean;
+  [key: string]: any;
 }
 
 export interface TransactionContextType {
@@ -20,4 +23,12 @@ export interface TransactionContextType {
   isSyncing?: boolean;
   autoSync?: boolean;
   setAutoSync?: (value: boolean) => void;
+}
+
+export interface SummaryData {
+  totalIncome: number;
+  totalExpense: number;
+  totalBalance: number;
+  expensesByCategory: Record<string, number>;
+  monthlyExpenses: number[];
 }

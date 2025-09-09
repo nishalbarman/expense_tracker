@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Slot, Stack } from "expo-router";
+import { router, Slot, Stack } from "expo-router";
 import {
   Platform,
   useColorScheme,
   StatusBar as RNStatusBar,
+  TouchableOpacity,
 } from "react-native";
 
 import { StatusBar } from "expo-status-bar";
@@ -15,6 +16,7 @@ import { initializeAppCheck } from "@react-native-firebase/app-check";
 import { getApp } from "@react-native-firebase/app";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import CustomHeaderBar from "@/components/header/HeaderBar";
+import { Ionicons } from "@expo/vector-icons";
 // import { getAuth, signInAnonymously } from "@react-native-firebase/auth";
 
 function Layout() {
@@ -38,21 +40,38 @@ function Layout() {
         }
       }>
       <Stack.Screen
-        name="login"
+        name="historytrash"
         options={{
           headerShown: false,
-          header: () => {
-            return <CustomHeaderBar headerName="Login" />;
-          },
-        }}
-      />
-      <Stack.Screen
-        name="signup"
-        options={{
-          headerShown: false,
-          header: () => {
-            return <CustomHeaderBar headerName="Signup" />;
-          },
+          // header: () => {
+          //   return (
+          //     <CustomHeaderBar
+          //       headerName="Trash"
+          //       rightIcon={(badgeIcon: any) => {
+          //         return (
+          //           <TouchableOpacity
+          //             onPress={() => {
+          //               router.push("/historytrash");
+          //             }}
+          //             style={badgeIcon}
+          //             activeOpacity={0.7}>
+          //             (
+          //             <Ionicons
+          //               name={
+          //                 theme.colors.primary === "#429690"
+          //                   ? "trash-outline"
+          //                   : "cloudy-night"
+          //               }
+          //               size={18}
+          //               color="#FFFFFF"
+          //             />
+          //             )
+          //           </TouchableOpacity>
+          //         );
+          //       }}
+          //     />
+          //   );
+          // },
         }}
       />
     </Stack>

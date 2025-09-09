@@ -22,6 +22,8 @@ import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppSelector } from "@/redux/hooks";
+import { useAddTransactionMutation } from "@/redux/api/localTxApi";
+import { v4 as uuidv4 } from "uuid";
 
 type FormValues = {
   type: "expense" | "income";
@@ -182,7 +184,7 @@ const CustomButton = ({
   ...props
 }: any) => {
   const theme = useTheme();
-  const {themePref} = useAppSelector(state=>state.theme)
+  const { themePref } = useAppSelector((state) => state.theme);
 
   const buttonStyle = [
     styles.button,
@@ -321,8 +323,14 @@ const CustomSelectInput = ({
 
 export default function AddTransactionScreen(): JSX.Element {
   const pathname = usePathname();
-  const { addTransaction } = useTransactions();
+  // const { addTransaction } = useTransactions();
   const theme = useTheme();
+
+  const uid = useAppSelector((s) => s.transactionsUI.uid) ?? "__local__";
+
+  const [addTransaction, { error }] = useAddTransactionMutation();
+
+  console.log("Add transaction error: ", error);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [categoryQuery, setCategoryQuery] = useState("");
@@ -385,20 +393,27 @@ export default function AddTransactionScreen(): JSX.Element {
         setIsSubmitting(false);
         return;
       }
+
+      const randomUid = uuidv4();
+
       const newTransaction = {
+        id: randomUid,
         amount: amt,
         category: data.category,
         type: data.type,
-        date: new Date().toISOString(),
+        dateIso: new Date().toISOString(),
         notes: data.notes?.trim() || "",
         synced: false,
+        userId: uid,
+        updatedAt: 0,
       };
-      await addTransaction(newTransaction);
+      await addTransaction(newTransaction).unwrap();
       Toast.show({ type: "success", text1: "Transaction added" });
       reset();
       Keyboard.dismiss();
       router.replace("/");
     } catch (e) {
+      console.warn(e);
       Toast.show({
         type: "error",
         text1: "Failed to add",
@@ -422,6 +437,8 @@ export default function AddTransactionScreen(): JSX.Element {
 
   const insets = useSafeAreaInsets();
 
+  console.log(error);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ScrollView
@@ -435,12 +452,14 @@ export default function AddTransactionScreen(): JSX.Element {
             render={({ field: { onChange, value } }) => (
               <SegmentedButtons
                 value={value}
-                onValueChange={(val) => onChange(val as FormValues["type"])}
+                onValueChange={(val: any) =>
+                  onChange(val as FormValues["type"])
+                }
                 buttons={[
                   { value: "expense", label: "Expense", icon: "arrow-down" },
                   { value: "income", label: "Income", icon: "arrow-up" },
                 ]}
-                style={styles.segmentedButtons}
+                // style={styles.segmentedButtons}
               />
             )}
           />
@@ -464,7 +483,7 @@ export default function AddTransactionScreen(): JSX.Element {
                 <CustomTextInput
                   label="Amount"
                   value={value}
-                  onChangeText={(t) => onChange(formatAmountInput(t))}
+                  onChangeText={(t: string) => onChange(formatAmountInput(t))}
                   keyboardType={Platform.select({
                     ios: "decimal-pad",
                     android: "numeric",
