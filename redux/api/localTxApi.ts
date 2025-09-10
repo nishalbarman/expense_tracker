@@ -9,6 +9,8 @@ import {
   getSyncState,
   upsertSyncState,
   getUserSummary,
+  deletedTxPageByCursor,
+  restoreDeletedTx,
 } from "@/db/sqlite/repos/transactionRepo";
 import { SummaryData, Transaction } from "@/types";
 import { getUserSummaryChart } from "@/db/sqlite/repos/summaryRepo";
@@ -67,8 +69,40 @@ export const localTxApi = createApi({
           return { error: { status: "CUSTOM_ERROR", error: error.message } };
         }
       },
-      providesTags: ["Transactions"]
+      providesTags: ["Transactions"],
     }),
+
+    fetchDeletedTx: builder.query<
+      { items: Transaction[]; nextCursor?: { dateIso: string; id: string } },
+      {
+        userId: string;
+        pageSize: number;
+        cursor?: { dateIso: string; id: string };
+      }
+    >({
+      queryFn: async ({ userId, pageSize, cursor }) => {
+        try {
+          const result = await deletedTxPageByCursor(userId, pageSize, cursor);
+          return { data: result };
+        } catch (error: any) {
+          return { error: { status: "CUSTOM_ERROR", error: error.message } };
+        }
+      },
+      providesTags: ["Transactions"],
+    }),
+
+    // // 2. Search transactions by term
+    // searchTx: builder.query<Transaction[], { userId: string; term: string }>({
+    //   queryFn: async ({ userId, term }) => {
+    //     try {
+    //       const rows = await searchByTerm(userId, term);
+    //       return { data: rows };
+    //     } catch (error: any) {
+    //       return { error: { status: "CUSTOM_ERROR", error: error.message } };
+    //     }
+    //   },
+    //   providesTags: ["Transactions"],
+    // }),
 
     // 3. Get all unsynced transactions
     fetchUnsynced: builder.query<Transaction[], string>({
@@ -171,6 +205,18 @@ export const localTxApi = createApi({
       invalidatesTags: ["Transactions", "UserSummary", "ChartData"],
     }),
 
+    restoreDeletedTx: builder.mutation<{ id: string }, { id: string }>({
+      queryFn: async ({ id }) => {
+        try {
+          await restoreDeletedTx(id);
+          return { data: { id } };
+        } catch (error: any) {
+          return { error: { status: "CUSTOM_ERROR", error: error.message } };
+        }
+      },
+      invalidatesTags: ["Transactions", "UserSummary", "ChartData"],
+    }),
+
     getUserSummary: builder.query({
       queryFn: async ({ userId }) => {
         try {
@@ -206,6 +252,8 @@ export const localTxApi = createApi({
 export const {
   useFetchTxPageQuery,
   useFetchRecentTxQuery,
+  useFetchDeletedTxQuery,
+  useRestoreDeletedTxMutation,
   useSearchTxQuery,
   useFetchUnsyncedQuery,
   useFetchSyncStateQuery,

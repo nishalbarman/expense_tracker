@@ -126,18 +126,18 @@ export default function TransactionHistoryScreen(): JSX.Element {
       <Animated.View
         style={{
           borderRadius: 5,
-          paddingHorizontal: 10,
-          backgroundColor: theme.colors.card,
+          // paddingHorizontal: 10,
+          // backgroundColor: theme.colors.card,
           marginHorizontal: 16,
-          ...Platform.select({
-            ios: {
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: theme.dark ? 0.25 : 0.1,
-              shadowRadius: theme.dark ? 10 : 8,
-            },
-            android: { elevation: 2 },
-          }),
+          // ...Platform.select({
+          //   ios: {
+          //     shadowColor: "#000",
+          //     shadowOffset: { width: 0, height: 2 },
+          //     shadowOpacity: theme.dark ? 0.25 : 0.1,
+          //     shadowRadius: theme.dark ? 10 : 8,
+          //   },
+          //   android: { elevation: 2 },
+          // }),
         }}
         entering={FadeInUp.delay(Math.min(index, 12) * 40).duration(280)}>
         {/* HistoryItem expects fields: id, amount, category, dateIso, notes, type, synced */}
@@ -194,7 +194,6 @@ export default function TransactionHistoryScreen(): JSX.Element {
               }}
               style={styles.badgeIcon}
               activeOpacity={0.7}>
-              (
               <Ionicons
                 name={
                   theme.colors.primary === "#429690"
@@ -204,7 +203,6 @@ export default function TransactionHistoryScreen(): JSX.Element {
                 size={18}
                 color="#FFFFFF"
               />
-              )
             </TouchableOpacity>
             {/* <TouchableOpacity
               onPress={handleToggleTheme}

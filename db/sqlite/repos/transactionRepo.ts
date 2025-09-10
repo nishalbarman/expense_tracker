@@ -230,7 +230,7 @@ export async function getRecent5Transactions(
   return { items, nextCursor };
 }
 
-export async function deletedTrashPageByCursor(
+export async function deletedTxPageByCursor(
   userId: string,
   pageSize: number,
   cursor?: { dateIso: string; id: string }
@@ -259,6 +259,17 @@ export async function deletedTrashPageByCursor(
       }
     : undefined;
   return { items, nextCursor };
+}
+
+export async function restoreDeletedTx(id: string) {
+  const database = await db();
+
+  const sql = `UPDATE transactions SET deleted=0 WHERE id=?`;
+  try {
+    const stmt = await database.runAsync(sql, [id]);
+  } catch (error) {
+    console.warn(error);
+  }
 }
 
 export async function searchByTerm(userId: string, term: string, limit = 40) {

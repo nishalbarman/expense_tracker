@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import type { Transaction } from "../../types";
 import Animated, { FadeInUp } from "react-native-reanimated";
-import { HistoryItem } from "@/components/HistoryItem";
+import { HistoryTrashItem } from "@/components/HistoryTrashItem";
 import { getBottomContentPadding } from "../_layout";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -20,7 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@react-navigation/native";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { toggleTheme } from "@/redux/slices/themeSlice";
-import { useFetchTxPageQuery } from "@/redux/api/localTxApi"; // RTK Query over SQLite
+import { useFetchDeletedTxQuery, useFetchTxPageQuery } from "@/redux/api/localTxApi"; // RTK Query over SQLite
 
 type FilterType = "all" | "income" | "expense";
 
@@ -93,7 +93,7 @@ export default function TransactionHistoryScreen(): JSX.Element {
   const [pages, setPages] = useState<any[]>([]);
 
   // Fetch a page from SQLite
-  const { data, isFetching, refetch, isUninitialized } = useFetchTxPageQuery(
+  const { data, isFetching, refetch, isUninitialized } = useFetchDeletedTxQuery(
     { userId: uid, pageSize: PAGE_SIZE, cursor },
     { skip: !uid }
   );
@@ -125,22 +125,22 @@ export default function TransactionHistoryScreen(): JSX.Element {
       <Animated.View
         style={{
           borderRadius: 5,
-          paddingHorizontal: 10,
-          backgroundColor: theme.colors.card,
+          // paddingHorizontal: 10,
+          // backgroundColor: theme.colors.card,
           marginHorizontal: 16,
-          ...Platform.select({
-            ios: {
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: theme.dark ? 0.25 : 0.1,
-              shadowRadius: theme.dark ? 10 : 8,
-            },
-            android: { elevation: 2 },
-          }),
+          // ...Platform.select({
+          //   ios: {
+          //     shadowColor: "#000",
+          //     shadowOffset: { width: 0, height: 2 },
+          //     shadowOpacity: theme.dark ? 0.25 : 0.1,
+          //     shadowRadius: theme.dark ? 10 : 8,
+          //   },
+          //   android: { elevation: 2 },
+          // }),
         }}
         entering={FadeInUp.delay(Math.min(index, 12) * 40).duration(280)}>
         {/* HistoryItem expects fields: id, amount, category, dateIso, notes, type, synced */}
-        <HistoryItem index={index} item={item} />
+        <HistoryTrashItem item={item} />
       </Animated.View>
     ),
     [theme.colors.card, theme.dark]
