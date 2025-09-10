@@ -33,7 +33,9 @@ import { transactionCategories } from "@/data/transactionCategories";
 import appCheck from "@react-native-firebase/app-check";
 import auth from "@react-native-firebase/auth";
 import Toast from "react-native-toast-message";
-import { useTransactions } from "@/context/TransactionContext";
+import { useAddTransactionMutation } from "@/redux/api/localTxApi";
+import { useAppSelector } from "@/redux/hooks";
+import { v4 as uuid } from "uuid";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -294,8 +296,9 @@ export default function ScanImageScreen(): JSX.Element {
     return normalized;
   };
 
+  const uid = useAppSelector((s) => s.transactionsUI.uid) ?? "__local__";
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { addTransaction } = useTransactions();
+  const [addTransaction, { error }] = useAddTransactionMutation();
 
   const handleCopyTransaction = async () => {
     if (!recognizedText) return;
@@ -312,14 +315,17 @@ export default function ScanImageScreen(): JSX.Element {
         return;
       }
       const newTransaction = {
+        id: uuid(),
+        userId: uid,
         amount: amt,
         category: recognizedText.category,
         type: recognizedText.type,
-        date: new Date().toISOString(),
+        dateIso: new Date().toISOString(),
         notes: recognizedText.note?.trim() || "",
+        updatedAt: new Date().getTime(),
         synced: false,
       };
-      await addTransaction(newTransaction);
+      await addTransaction(newTransaction).unwrap();
       Toast.show({ type: "success", text1: "Transaction added" });
       setHasResult(false);
       setSelectedImage(null);
@@ -504,8 +510,8 @@ export default function ScanImageScreen(): JSX.Element {
                     styles.copyButton,
                     {
                       backgroundColor:
-                        (theme.colors as any).primaryContainer ??
-                        theme.colors.primary + "20",
+                        (theme.colors as any).tabActive ??
+                        theme.colors.primary + "20",  
                     },
                   ]}
                   onPress={handleCopyTransaction}>
