@@ -1,8 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   StyleSheet,
-  StatusBar,
   ScrollView,
   TouchableOpacity,
   Text,
@@ -11,7 +10,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { router } from "expo-router";
-import { useTransactions } from "../../context/TransactionContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getBottomContentPadding } from "./_layout";
 import { LinearGradient } from "expo-linear-gradient";
@@ -24,6 +22,8 @@ import {
   useFetchTxPageQuery,
   useGetUserSummaryQuery,
 } from "@/redux/api/localTxApi";
+import { StatusBar } from "expo-status-bar";
+import useScreenInterstitialAd from "@/hooks/ads/useScreenInterstitial";
 
 // Custom Card Component
 const CustomCard = ({ children, style, onPress, ...props }: any) => {
@@ -90,6 +90,40 @@ export default function HomeScreen(): JSX.Element {
   //   { skip: !uid }
   // );
 
+  /*
+   * Interstitial Ad related code
+   */
+
+  const {
+    isLoaded,
+    isClosed,
+    isOpened,
+    loadAd,
+    showAd,
+    canLoadAd,
+    canShowAd,
+    error: adError,
+  } = useScreenInterstitialAd("home");
+
+  useEffect(() => {
+    if (isOpened) {
+      setIsInterstitialShowStarting(false);
+    }
+  }, [isOpened]);
+
+  const [isInterstitialShowStarting, setIsInterstitialShowStarting] =
+    useState(false);
+
+  const requestShow = useCallback(() => {
+    if (isLoaded) {
+      showAd();
+    }
+  }, [isLoaded]);
+
+  /*
+   * Interstitial Ad related code
+   */
+
   const {
     data: userSummaryData,
     refetch: userSummaryRefetch,
@@ -139,7 +173,13 @@ export default function HomeScreen(): JSX.Element {
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>
-      <StatusBar barStyle="light-content" />
+      {/* <StatusBar style="light" /> */}
+
+      <LinearGradient
+        colors={[theme.colors.primary, theme.colors.secondary]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[{ height: insets.top }]}></LinearGradient>
 
       {/* Single ScrollView page */}
       <ScrollView

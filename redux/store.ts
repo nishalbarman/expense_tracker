@@ -16,8 +16,20 @@ import themeReducer from "./slices/themeSlice";
 import { localTxApi } from "./api/localTxApi";
 import { summaryTxApi } from "./api/summaryTxApi";
 
+import adConfigReducer from "./slices/adConfigSlice";
+import adFreeConfigReducer from "./slices/adFreeSlice";
+import androidVersionConfigReducer from "./slices/androidVersionConfig";
+import appConfigReducer from "./slices/appConfigSlice";
+import adActivitySlice from "./slices/adActivitySlice";
+
 const rootReducer = combineReducers({
   //   user: userReducer,
+  adConfig: adConfigReducer,
+  androidVersionConfig: androidVersionConfigReducer,
+  adActivity: adActivitySlice,
+  adFreeConfig: adFreeConfigReducer,
+  appConfig: appConfigReducer,
+
   theme: themeReducer,
   transactionsUI: transactionsUI,
   [summaryTxApi.reducerPath]: summaryTxApi.reducer,
@@ -31,6 +43,9 @@ const persistConfig = {
     // "user",
     "theme",
     "transactionsUI",
+
+    "adActivity",
+    "adFreeConfig",
   ], // persist both
 };
 
@@ -43,7 +58,9 @@ export const store = configureStore({
       serializableCheck: {
         ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
       },
-    }).concat(localTxApi.middleware).concat(summaryTxApi.middleware),
+    })
+      .concat(localTxApi.middleware)
+      .concat(summaryTxApi.middleware),
 });
 
 // 🔹 Infer types for useDispatch & useSelector

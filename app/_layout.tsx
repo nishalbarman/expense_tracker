@@ -1,10 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Slot, Stack } from "expo-router";
-import {
-  Platform,
-  useColorScheme,
-  StatusBar as RNStatusBar,
-} from "react-native";
+import { PermissionsAndroid, Platform, useColorScheme } from "react-native";
+import remoteConfig from "@react-native-firebase/remote-config";
 
 import { StatusBar } from "expo-status-bar";
 
@@ -32,10 +29,16 @@ import {
   startAuthWatch,
   startNetWatch,
 } from "@/redux/slices/transactionsUISlice";
-import { runMigrations } from "@/db/sqlite/client";
 import { migrateDbIfNeeded } from "@/db/sqlite/migrate";
 // import { getAuth, signInAnonymously } from "@react-native-firebase/auth";
+import { MobileAds } from "react-native-google-mobile-ads";
 import "react-native-get-random-values";
+import { updateAdConfig } from "@/redux/slices/adConfigSlice";
+import { updateAppConfig } from "@/redux/slices/appConfigSlice";
+import {
+  updateAdFreeUnlockTime,
+  updateIsFetchedAndActivated,
+} from "@/redux/slices/adFreeSlice";
 
 const lightTheme = {
   ...DefaultTheme,
@@ -176,13 +179,15 @@ function AppContainer() {
     return currentTheme === "dark" ? darkTheme : lightTheme;
   }, [themePref]);
 
-  RNStatusBar.setBarStyle("light-content");
-  if (Platform.OS === "android") {
-    RNStatusBar.setBackgroundColor(theme.colors.primary);
-    RNStatusBar.setTranslucent(false);
-  }
+  // RNStatusBar.setBarStyle("light-content");
+  // if (Platform.OS === "android") {
+  //   RNStatusBar.setBackgroundColor(theme.colors.primary);
+  //   RNStatusBar.setTranslucent(false);
+  // }
 
   const dispatch = useAppDispatch();
+
+  const { isUserBlocked } = useAppSelector((state) => state.adActivity);
 
   // useEffect(() => {
   //   if (!themePref) {
@@ -190,12 +195,60 @@ function AppContainer() {
   //   }
   // }, [themePref, theme]);
 
+  // Fetch and activate remote config, including ad settings
+  const fetchRemoteConfig = useCallback(async () => {
+    (async () => {
+      if (isUserBlocked) return;
+      await remoteConfig().setDefaults({
+        ad_config: JSON.stringify({
+          isEnabled: true,
+          banner_id: "ca-app-pub-3940256099942544/9214589741",
+          appopen_id: "ca-app-pub-3940256099942544/9257395921",
+          interstitial_id: "ca-app-pub-3940256099942544/1033173712",
+          rewarded_id: "ca-app-pub-3940256099942544/5224354917",
+          native_id: "ca-app-pub-3940256099942544/2247696110",
+          frequentInterval: 1000,
+          maximumAllowedFrequentClicks: 3,
+          apOpenAdPauseTime: 120000,
+          interstitialAdPauseTime: 60000,
+          rewardedAdPauseTime: 60000,
+        }),
+        android_version_config: JSON.stringify({
+          version_code: 72,
+          force_update: true,
+        }),
+        adFreeUnlockTime: 0,
+      });
+
+      await remoteConfig().fetchAndActivate();
+
+      const adConfig = JSON.parse(remoteConfig().getString("ad_config"));
+      const androidVersionConfig = JSON.parse(
+        remoteConfig().getString("android_version_config")
+      );
+      const theme = remoteConfig().getString("theme");
+      const adFreeUnlockTime = remoteConfig().getNumber("adFreeUnlockTime");
+
+      dispatch(updateAdConfig(adConfig));
+      dispatch(
+        updateAppConfig({ ...androidVersionConfig, fetchedActivated: true })
+      );
+      dispatch(updateAdFreeUnlockTime(adFreeUnlockTime));
+      dispatch(updateIsFetchedAndActivated(true));
+    })();
+  }, [isUserBlocked]);
+
   useEffect(() => {
     (async () => {
       const appCheck = await initializeAppCheck(getApp(), {
         provider: rnfbProvider,
         isTokenAutoRefreshEnabled: true,
       });
+
+      await Promise.all([fetchRemoteConfig()]);
+      PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+      );
 
       // try {
       //   // `appCheckInstance` is the saved return value from initializeAppCheck
@@ -262,6 +315,26 @@ function AppContainer() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    MobileAds()
+      .initialize()
+      .then((adapterStatuses) => {
+        // Initialization complete!
+        console.log("Adapter Statuses", adapterStatuses);
+      });
+  }, []);
+
+  useEffect(() => {
+    remoteConfig()
+      .setDefaults({
+        awesome_new_feature: "disabled",
+      })
+      .then(() => {
+        console.log("Default values set.");
+      });
+  }, []);
+
   if (!ready) return null; // or splash
 
   return (
@@ -276,7 +349,7 @@ function AppContainer() {
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
-      <StatusBar style="auto" />
+      <StatusBar style="auto" translucent={true} />
       <Toast />
       {/* </TransactionProvider> */}
     </ThemeProvider>
